@@ -1,0 +1,33 @@
+# Gradle
+.gradle/
+**/build/
+
+# Local configuration (SDK path, credentials, etc.) - never commit
+/local.properties
+local.properties
+/secrets.properties
+
+# IntelliJ IDEA / Android Studio
+*.iml
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Native build outputs
+.externalNativeBuild/
+.cxx/
+
+# Captures & profiling
+/captures/
+*.hprof
+
+# Signing keys - never commit private keys
+*.jks
+*.keystore
+keystore.properties
+
+# Editor backups
+*.swp
+*~
