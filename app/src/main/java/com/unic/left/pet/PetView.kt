@@ -20,8 +20,10 @@ import java.nio.ByteBuffer
  * A Filament-backed 3D companion surface.
  *
  * Owns a [ModelViewer] for the lifetime of the window attachment and drives it from a
- * [Choreographer] frame callback. One-finger orbit, two-finger pan and pinch-zoom are handled
- * by the viewer; a single tap is forwarded to [onTap] and cycles the model's animation.
+ * [Choreographer] frame callback. The animated fox and the room are bundled into one glTF asset,
+ * so a single [ModelViewer] manages the whole scene. One-finger orbit, two-finger pan and
+ * pinch-zoom are handled by the viewer; a single tap is forwarded to [onTap] and cycles the
+ * fox animation.
  */
 class PetView @JvmOverloads constructor(
     context: Context,
@@ -85,7 +87,7 @@ class PetView @JvmOverloads constructor(
     override fun doFrame(frameTimeNanos: Long) {
         if (!running) return
         choreographer.postFrameCallback(this)
-        // ModelViewer.render() also advances glTF animations when autoPlayAnimations is true.
+        // ModelViewer.render() advances glTF animations when autoPlayAnimations is true.
         viewer?.render(frameTimeNanos)
     }
 
@@ -116,7 +118,7 @@ class PetView @JvmOverloads constructor(
     /** Generates image-based lighting and a skybox on-device from the bundled HDR image. */
     private fun setupEnvironment(v: ModelViewer) {
         val engine = v.engine
-        val hdr = readAsset("envs/lightroom_14b.hdr") ?: return
+        val hdr = readAsset("envs/room.hdr") ?: return
         val equirect = HDRLoader.createTexture(engine, hdr) ?: return
 
         val context = IBLPrefilterContext(engine)
@@ -133,7 +135,7 @@ class PetView @JvmOverloads constructor(
         val reflections = specularFilter.run(skyboxTexture)
         val ibl = IndirectLight.Builder()
             .reflections(reflections)
-            .intensity(30_000.0f)
+            .intensity(25_000.0f)
             .build(engine)
         val skybox = Skybox.Builder().environment(skyboxTexture).build(engine)
         specularFilter.destroy()
