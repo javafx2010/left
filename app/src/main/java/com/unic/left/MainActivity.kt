@@ -97,7 +97,7 @@ fun PetScreen() {
         ) {
             Column {
                 Text(
-                    text = "小狐",
+                    text = "小女仆",
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold

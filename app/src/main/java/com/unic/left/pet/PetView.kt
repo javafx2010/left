@@ -20,10 +20,9 @@ import java.nio.ByteBuffer
  * A Filament-backed 3D companion surface.
  *
  * Owns a [ModelViewer] for the lifetime of the window attachment and drives it from a
- * [Choreographer] frame callback. The animated fox and the room are bundled into one glTF asset,
- * so a single [ModelViewer] manages the whole scene. One-finger orbit, two-finger pan and
- * pinch-zoom are handled by the viewer; a single tap is forwarded to [onTap] and cycles the
- * fox animation.
+ * [Choreographer] frame callback. One-finger orbit, two-finger pan and pinch-zoom are handled
+ * by the viewer; a single tap is forwarded to [onTap] and, when the model has animations,
+ * advances to the next one.
  */
 class PetView @JvmOverloads constructor(
     context: Context,
@@ -109,7 +108,7 @@ class PetView @JvmOverloads constructor(
 
         setupEnvironment(v)
 
-        readAsset("models/Fox.glb")?.let { buffer ->
+        readAsset("models/girl.glb")?.let { buffer ->
             v.loadModelGlb(buffer)
             v.transformToUnitCube()
         }
@@ -146,7 +145,7 @@ class PetView @JvmOverloads constructor(
         v.scene.skybox = skybox
     }
 
-    /** Advances to the next bundled glTF animation and notifies the host. */
+    /** Advances to the next glTF animation (if any) and notifies the host. */
     private fun pet() {
         val v = viewer
         if (v != null) {
