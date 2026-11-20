@@ -44,6 +44,31 @@ fun interpolate(points: List<LatLng>, cum: DoubleArray, dist: Double): LatLng {
     )
 }
 
+/** 把点投影到折线上，返回从起点起的累计里程（米）。 */
+fun projectToRoute(points: List<LatLng>, cum: DoubleArray, p: LatLng): Double {
+    if (points.isEmpty()) return 0.0
+    if (points.size == 1) return 0.0
+    var bestDist = Double.MAX_VALUE
+    var bestTraveled = 0.0
+    for (i in 1 until points.size) {
+        val a = points[i - 1]
+        val b = points[i]
+        val dx = b.longitude - a.longitude
+        val dy = b.latitude - a.latitude
+        val len2 = dx * dx + dy * dy
+        val t = if (len2 == 0.0) 0.0 else
+            (((p.longitude - a.longitude) * dx + (p.latitude - a.latitude) * dy) / len2)
+                .coerceIn(0.0, 1.0)
+        val proj = LatLng(a.latitude + dy * t, a.longitude + dx * t)
+        val d = distanceMeters(p, proj)
+        if (d < bestDist) {
+            bestDist = d
+            bestTraveled = cum[i - 1] + (cum[i] - cum[i - 1]) * t
+        }
+    }
+    return bestTraveled
+}
+
 fun formatDistance(meters: Float): String = when {
     meters >= 1000f -> "%.1f km".format(meters / 1000f)
     else -> "%.0f m".format(meters)

@@ -1,8 +1,8 @@
 ﻿package com.unic.watchdog.feature.nav
 
+import android.content.pm.ActivityInfo
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,14 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,25 +65,16 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.hypot
-
-private val CamNear = Color(0xFFFF6A58)
-private val CamMid = Color(0xFFFFC35C)
-private val CamFar = Color(0xFF5FE0A8)
 
 @Composable
 fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val settings by appVm.navSettings.collectAsState()
-    var tencentMap by remember {
-        mutableStateOf<com.tencent.tencentmap.mapsdk.maps.TencentMap?>(null)
-    }
     var state by remember { mutableStateOf<NavState?>(null) }
-    var navigator by remember { mutableStateOf<SimulatedNavigator?>(null) }
+    var navigator by remember { mutableStateOf<NavigationTracker?>(null) }
     var companionOn by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
-    var eyeAnchor by remember { mutableStateOf<Offset?>(null) }
-    var camScreen by remember { mutableStateOf<Offset?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -95,12 +83,24 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
         }
     }
 
+    // 陪伴模式强制横屏；退出时恢复竖屏（configChanges 保证不重建，导航状态不丢失）。
+    val activity = context as? android.app.Activity
+    DisposableEffect(companionOn) {
+        val act = activity
+        if (companionOn && act != null) {
+            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            onDispose { act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+        } else {
+            onDispose { }
+        }
+    }
+
     fun saveRecord() {
         val df = SimpleDateFormat("MM 月 dd 日", Locale.CHINA)
         scope.launch {
             AppContainer.recordRepo.add(
                 TravelRecord(
-                    title = "模拟导航 ${state?.progress ?: 0}%",
+                    title = "前往 ${appVm.navDestination.value.title}",
                     date = df.format(Date()),
                     distanceText = formatDistance(route.distanceMeters).replace(" km", ""),
                     durationText = "0:${"%02d".format((state?.progress ?: 0) / 4)}",
@@ -118,7 +118,7 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
         onExit()
     }
 
-    // 我的页「暂停导航」开关联动到模拟器。
+    // 我的页「暂停导航」开关联动到跟踪器。
     LaunchedEffect(settings.paused) {
         navigator?.setPaused(settings.paused)
     }
@@ -132,15 +132,8 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
 
     Box(Modifier.fillMaxSize()) {
         TencentMapView(Modifier.fillMaxSize(), onMapReady = { map ->
-            tencentMap = map
-            navigator = SimulatedNavigator(map, route) { s ->
+            navigator = NavigationTracker(context, map, route) { s ->
                 state = s
-                // 电子眼箭头：把地图上的电子眼标记投影到屏幕坐标。
-                navigator?.cameraLatLng?.let { ll ->
-                    map.projection.toScreenLocation(ll)?.let { p ->
-                        camScreen = Offset(p.x.toFloat(), p.y.toFloat())
-                    }
-                }
                 if (s.progress >= 100) finished = true
             }
             // 绘制完整路线（腾讯蓝）。
@@ -157,13 +150,8 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
                     )
                 )
             }
-            navigator?.start(scope)
+            navigator?.start()
         })
-
-        // 电子眼指向箭头（画在最上层）。
-        if (state?.eye != null && eyeAnchor != null && camScreen != null) {
-            EyePointer(eyeAnchor!!, camScreen!!)
-        }
 
         // 返回
         IconButton(
@@ -187,57 +175,7 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
             )
         }
 
-        // 电子眼卡（含锚点测量）
-        state?.eye?.let { eye ->
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8ED)),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 192.dp)
-                    .padding(horizontal = 18.dp)
-                    .onGloballyPositioned { c ->
-                        val p = c.positionInRoot()
-                        eyeAnchor = Offset(p.x + c.size.width / 2f, p.y + c.size.height)
-                    }
-            ) {
-                Row(
-                    Modifier.padding(vertical = 9.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(Color(0xFFFFE4B8)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Flag,
-                            contentDescription = null,
-                            tint = Color(0xFFC47A08),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Column(Modifier.padding(start = 8.dp)) {
-                        Text(
-                            eye.title,
-                            fontSize = 11.sp,
-                            color = Color(0xFF9A6705),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            eye.desc,
-                            fontSize = 9.sp,
-                            color = Color(0xFFA98244),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 右侧 HUD：限速牌 / 车速表 / 海拔卡
+        // 右侧 HUD：车速表 / 海拔卡
         state?.let { s ->
             Hud(
                 s, Modifier
@@ -342,26 +280,8 @@ private fun InstructionCard(s: NavState, modifier: Modifier) {
 
 @Composable
 private fun Hud(s: NavState, modifier: Modifier) {
-    val over = s.speed > s.speedLimit
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        // 限速牌
-        Box(
-            Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(Color.White)
-                .border(4.dp, Color(0xFFE8443A), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "${s.speedLimit}",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Ink
-            )
-        }
-        Spacer(Modifier.height(7.dp))
-        Speedo(s.speed, over)
+        Speedo(s.speed, s.speed >= 120)
         Spacer(Modifier.height(7.dp))
         // 海拔卡
         Column(
@@ -461,7 +381,7 @@ private fun BottomPanel(
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    "${maxOf(1, (100 - s.progress) / 4)} 分钟",
+                    etaText(s),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = Ink
@@ -515,44 +435,15 @@ private fun BottomPanel(
     }
 }
 
-/** 电子眼卡底部中心指向地图相机标记的箭头。 */
-@Composable
-private fun EyePointer(from: Offset, to: Offset) {
-    val dx = to.x - from.x
-    val dy = to.y - from.y
-    if (dy <= 8f) return
-    val len = hypot(dx, dy)
-    Canvas(Modifier.fillMaxSize()) {
-        val end = from + Offset(dx, dy)
-        val stroke = 3.dp.toPx()
-        drawLine(
-            color = Color(0xFFF0A020),
-            start = from,
-            end = end,
-            strokeWidth = stroke
-        )
-        // 箭头
-        val backLen = 10.dp.toPx()
-        val ux = dx / len
-        val uy = dy / len
-        val back = end - Offset(ux * backLen, uy * backLen)
-        val perp = Offset(-uy, ux)
-        val p1 = back + Offset(perp.x * 6.dp.toPx(), perp.y * 6.dp.toPx())
-        val p2 = back - Offset(perp.x * 6.dp.toPx(), perp.y * 6.dp.toPx())
-        val path = Path().apply {
-            moveTo(end.x, end.y)
-            lineTo(p1.x, p1.y)
-            lineTo(p2.x, p2.y)
-            close()
-        }
-        drawPath(path, color = Color(0xFFF0A020))
-    }
+/** 按真实车速估算剩余时间；速度过低或为 0 时返回「—」。 */
+private fun etaText(s: NavState): String {
+    if (s.speed < 5) return "—"
+    val minutes = (s.remainMeters / (s.speed * 1000.0 / 60.0)).toInt()
+    return if (minutes > 0) "$minutes 分钟" else "—"
 }
 
-/** 陪伴模式：全屏深色 HUD，左信号灯 · 中车速/电子眼 · 右转向灯。 */
 @Composable
 private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: () -> Unit) {
-    val over = s.speed > s.speedLimit
     Box(
         Modifier
             .fillMaxSize()
@@ -562,102 +453,44 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                 )
             )
     ) {
-        Row(
-            Modifier
-                .fillMaxSize()
-                .padding(18.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            // 左：信号灯
-            Box(
+            Text(
+                "${s.speed}",
+                fontSize = 150.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color(0xFF5FE0A8),
+                letterSpacing = (-8).sp
+            )
+            Text("km/h", fontSize = 15.sp, color = Color(0xFF5A8E88))
+            Spacer(Modifier.height(24.dp))
+            Row(
                 Modifier
-                    .weight(0.85f)
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color.White.copy(0.05f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = 40.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                Column(
-                    Modifier
-                        .clip(RoundedCornerShape(36.dp))
-                        .background(Color(0xFF051614))
-                        .padding(horizontal = 16.dp, vertical = 22.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    val redOn = s.redLight
-                    val greenOn = !s.redLight
-                    LampDot(if (redOn) Color(0xFFFF5F4D) else Color(0xFF1D3533))
-                    LampDot(Color(0xFF1D3533))
-                    LampDot(if (greenOn) Color(0xFF4FD39B) else Color(0xFF1D3533))
-                }
-            }
-            // 中：车速 + 电子眼
-            Column(
-                Modifier
-                    .weight(2.4f)
-                    .fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "${s.speed}",
-                    fontSize = 150.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (over) Color(0xFFFF5F4D) else Color(0xFF5FE0A8),
-                    letterSpacing = (-8).sp
-                )
-                Spacer(Modifier.height(20.dp))
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White.copy(0.06f))
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val dist = s.eye?.distance ?: 0
-                    val level = when {
-                        dist <= 100 -> CamNear
-                        dist <= 200 -> CamMid
-                        else -> CamFar
-                    }
-                    val lit = (dist / 50f).toInt().coerceIn(0, 10)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        repeat(10) { i ->
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .height(20.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(if (i < lit) level else Color(0xFF2A4744))
-                            )
-                        }
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        s.eye?.title ?: "",
-                        fontSize = 11.sp,
-                        color = Color(0xFF5A8E88),
-                        modifier = Modifier.padding(top = 10.dp)
+                        "%.1f".format(s.remainMeters / 1000.0),
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
+                    Text("剩余公里", fontSize = 12.sp, color = Color(0xFF5A8E88))
                 }
-            }
-            // 右：转向灯
-            Box(
-                Modifier
-                    .weight(0.85f)
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(
-                        if (s.turnLight) Color(0xFFFFB648).copy(0.12f) else Color.White.copy(0.05f)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.TurnRight,
-                    contentDescription = null,
-                    tint = if (s.turnLight) Color(0xFFFFB648) else Color(0xFF3F5D5A),
-                    modifier = Modifier.size(90.dp)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        etaText(s),
+                        fontSize = 40.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text("预计到达", fontSize = 12.sp, color = Color(0xFF5A8E88))
+                }
             }
         }
 
@@ -677,14 +510,4 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
             }
         }
     }
-}
-
-@Composable
-private fun LampDot(color: Color) {
-    Box(
-        Modifier
-            .size(30.dp)
-            .clip(CircleShape)
-            .background(color)
-    )
 }
