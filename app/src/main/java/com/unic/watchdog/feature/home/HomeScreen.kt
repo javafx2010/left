@@ -151,10 +151,10 @@ fun HomeScreen(appVm: AppViewModel) {
 
         Spacer(Modifier.height(6.dp))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+            columns = GridCells.Fixed(3),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp),
+                .height(330.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             userScrollEnabled = false

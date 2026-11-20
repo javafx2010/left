@@ -27,6 +27,14 @@ const val TAB_MINE = 3
 
 data class FocusEvent(val poi: Poi?, val token: Long = 0L)
 
+/** 导航设置（跨 tab 共享，导航页 / 我的页联动）。 */
+data class NavSettings(
+    val voiceOn: Boolean = true,
+    val voiceMode: String = "详细",
+    val paused: Boolean = false,
+    val volume: Int = 70
+)
+
 /** 跨 tab 共享状态。 */
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -46,6 +54,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _navTick = MutableStateFlow(0)
     val navTick: StateFlow<Int> = _navTick.asStateFlow()
+
+    private val _navSettings = MutableStateFlow(NavSettings())
+    val navSettings: StateFlow<NavSettings> = _navSettings.asStateFlow()
 
     private var token = 0L
 
@@ -130,5 +141,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun focusOnMap(poi: Poi) {
         token++
         _focusEvent.value = FocusEvent(poi, token)
+    }
+
+    fun setVoiceOn(on: Boolean) {
+        _navSettings.value = _navSettings.value.copy(voiceOn = on)
+    }
+
+    fun setVoiceMode(mode: String) {
+        _navSettings.value = _navSettings.value.copy(voiceMode = mode)
+    }
+
+    fun setPaused(paused: Boolean) {
+        _navSettings.value = _navSettings.value.copy(paused = paused)
+    }
+
+    fun setVolume(volume: Int) {
+        _navSettings.value = _navSettings.value.copy(volume = volume)
     }
 }

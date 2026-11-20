@@ -12,18 +12,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,6 +62,8 @@ import com.unic.watchdog.ui.theme.SurfaceTint
 fun MineScreen(appVm: AppViewModel) {
     var selected by remember { mutableIntStateOf(0) }
     var detail by remember { mutableStateOf<TravelRecord?>(null) }
+    var voiceDialog by remember { mutableStateOf(false) }
+    val settings by appVm.navSettings.collectAsState()
     if (detail != null) {
         RecordDetail(record = detail!!, onBack = { detail = null })
         return
@@ -114,7 +125,143 @@ fun MineScreen(appVm: AppViewModel) {
         records.forEach { r ->
             RecordCard(r, onClick = { detail = r })
         }
+
+        // 导航设置（与导航页联动）
+        Spacer(Modifier.height(18.dp))
+        Text(
+            "导航设置",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Ink,
+            modifier = Modifier.padding(start = 2.dp, bottom = 9.dp)
+        )
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column {
+                SettingRow(
+                    icon = Icons.Default.VolumeUp,
+                    title = "导航播报",
+                    sub = "开启语音引导提示"
+                ) {
+                    Switch(checked = settings.voiceOn, onCheckedChange = appVm::setVoiceOn)
+                }
+                SettingRow(
+                    icon = Icons.Default.CameraAlt,
+                    title = "播报设置",
+                    sub = "播报模式与音量",
+                    onClick = { voiceDialog = true }
+                )
+                SettingRow(
+                    icon = Icons.Default.Pause,
+                    title = "暂停导航",
+                    sub = "暂停 / 继续导航进度"
+                ) {
+                    Switch(checked = settings.paused, onCheckedChange = appVm::setPaused)
+                }
+            }
+        }
     }
+
+    if (voiceDialog) {
+        VoiceSettingsDialog(
+            settings = settings,
+            onDismiss = { voiceDialog = false },
+            onMode = appVm::setVoiceMode,
+            onVolume = appVm::setVolume
+        )
+    }
+}
+
+@Composable
+private fun SettingRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    sub: String,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(SurfaceTint),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = BrandPrimary,
+                modifier = Modifier.size(17.dp)
+            )
+        }
+        Column(Modifier
+            .padding(start = 11.dp)
+            .weight(1f)) {
+            Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Text(sub, fontSize = 10.sp, color = MutedInk, modifier = Modifier.padding(top = 3.dp))
+        }
+        trailing?.invoke()
+    }
+}
+
+@Composable
+private fun VoiceSettingsDialog(
+    settings: com.unic.watchdog.ui.NavSettings,
+    onDismiss: () -> Unit,
+    onMode: (String) -> Unit,
+    onVolume: (Int) -> Unit
+) {
+    val modes = listOf("简洁", "详细", "静音")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导航播报设置") },
+        text = {
+            Column {
+                modes.forEach { m ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onMode(m) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = settings.voiceMode == m, onClick = { onMode(m) })
+                        Text(m, fontSize = 13.sp, color = Ink)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.VolumeUp,
+                        contentDescription = null,
+                        tint = BrandPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("播报音量", fontSize = 11.5.sp, color = MutedInk)
+                    Spacer(Modifier.width(8.dp))
+                    Text("${settings.volume}%", fontSize = 11.5.sp, color = SubInk)
+                }
+                Slider(
+                    value = settings.volume.toFloat(),
+                    onValueChange = { onVolume(it.toInt()) },
+                    valueRange = 0f..100f
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("完成") }
+        }
+    )
 }
 
 @Composable

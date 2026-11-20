@@ -70,7 +70,10 @@ fun NavScreen(appVm: AppViewModel) {
     var route by remember { mutableStateOf<NavRoute>(NavRoute.Plan) }
     when (val r = route) {
         NavRoute.Plan -> RoutePlanScreen(appVm, onStartNav = { route = NavRoute.Navigating(it) })
-        is NavRoute.Navigating -> NavigatingScreen(r.route, onExit = { route = NavRoute.Plan })
+        is NavRoute.Navigating -> NavigatingScreen(
+            r.route,
+            appVm,
+            onExit = { route = NavRoute.Plan })
     }
 }
 

@@ -1,5 +1,9 @@
 ﻿package com.unic.watchdog.feature.nav
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,17 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.TurnRight
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -27,13 +28,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,16 +41,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unic.watchdog.core.AppContainer
 import com.unic.watchdog.core.MAP_PADDING
 import com.unic.watchdog.map.TencentMapView
+import com.unic.watchdog.model.NavState
 import com.unic.watchdog.model.RouteOption
 import com.unic.watchdog.model.TravelRecord
-import com.unic.watchdog.ui.theme.BrandAccent
+import com.unic.watchdog.ui.AppViewModel
 import com.unic.watchdog.ui.theme.BrandPrimary
 import com.unic.watchdog.ui.theme.Ink
 import com.unic.watchdog.ui.theme.MutedInk
@@ -60,28 +68,31 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.hypot
+
+private val CamNear = Color(0xFFFF6A58)
+private val CamMid = Color(0xFFFFC35C)
+private val CamFar = Color(0xFF5FE0A8)
 
 @Composable
-fun NavigatingScreen(route: RouteOption, onExit: () -> Unit) {
+fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var tencentMap by remember { mutableStateOf<com.tencent.tencentmap.mapsdk.maps.TencentMap?>(null) }
-    var progress by remember { mutableIntStateOf(0) }
-    var remain by remember { mutableStateOf(route.distanceMeters.toDouble()) }
-    var instruction by remember { mutableStateOf("前方路况良好，沿当前道路直行") }
-    var lane by remember { mutableStateOf("保持当前车道 · 注意交通安全") }
-    var paused by remember { mutableStateOf(false) }
-    var voice by remember { mutableStateOf(true) }
-    var eyeOn by remember { mutableStateOf(true) }
-    var finished by remember { mutableStateOf(false) }
-
+    val settings by appVm.navSettings.collectAsState()
+    var tencentMap by remember {
+        mutableStateOf<com.tencent.tencentmap.mapsdk.maps.TencentMap?>(null)
+    }
+    var state by remember { mutableStateOf<NavState?>(null) }
     var navigator by remember { mutableStateOf<SimulatedNavigator?>(null) }
+    var companionOn by remember { mutableStateOf(false) }
+    var finished by remember { mutableStateOf(false) }
+    var eyeAnchor by remember { mutableStateOf<Offset?>(null) }
+    var camScreen by remember { mutableStateOf<Offset?>(null) }
 
     DisposableEffect(Unit) {
-        onDispose { navigator?.stop() }
-    }
-
-    fun startNav() {
-        navigator?.start(scope)
+        onDispose {
+            navigator?.stop()
+            appVm.setPaused(false)
+        }
     }
 
     fun saveRecord() {
@@ -89,215 +100,591 @@ fun NavigatingScreen(route: RouteOption, onExit: () -> Unit) {
         scope.launch {
             AppContainer.recordRepo.add(
                 TravelRecord(
-                    title = "模拟导航 ${progress}%", date = df.format(Date()),
+                    title = "模拟导航 ${state?.progress ?: 0}%",
+                    date = df.format(Date()),
                     distanceText = formatDistance(route.distanceMeters).replace(" km", ""),
-                    durationText = "0:${"%02d".format(progress / 4)}",
-                    pointNames = listOf("起点", "终点"), mode = "导航"
+                    durationText = "0:${"%02d".format((state?.progress ?: 0) / 4)}",
+                    pointNames = listOf("起点", "终点"),
+                    mode = "导航"
                 )
             )
         }
     }
 
+    fun endNav() {
+        navigator?.stop()
+        navigator = null
+        appVm.setPaused(false)
+        onExit()
+    }
+
+    // 我的页「暂停导航」开关联动到模拟器。
+    LaunchedEffect(settings.paused) {
+        navigator?.setPaused(settings.paused)
+    }
+
+    LaunchedEffect(finished) {
+        if (finished) {
+            saveRecord()
+            endNav()
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
-        TencentMapView(Modifier.fillMaxSize(), onMapReady = {
-            tencentMap = it
-            navigator = SimulatedNavigator(it, route) { p, r, ins, ln ->
-                progress = p; remain = r; instruction = ins; lane = ln
-                if (p >= 100) finished = true
+        TencentMapView(Modifier.fillMaxSize(), onMapReady = { map ->
+            tencentMap = map
+            navigator = SimulatedNavigator(map, route) { s ->
+                state = s
+                // 电子眼箭头：把地图上的电子眼标记投影到屏幕坐标。
+                navigator?.cameraLatLng?.let { ll ->
+                    map.projection.toScreenLocation(ll)?.let { p ->
+                        camScreen = Offset(p.x.toFloat(), p.y.toFloat())
+                    }
+                }
+                if (s.progress >= 100) finished = true
             }
-            // 绘制完整路线
+            // 绘制完整路线（腾讯蓝）。
             if (route.points.isNotEmpty()) {
-                it.addPolyline(
+                map.addPolyline(
                     com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions()
-                        .addAll(route.points).color(BrandPrimary.hashCode()).width(10f).arrow(true)
+                        .addAll(route.points).color(0xFF2D7FF9.toInt()).width(10f).arrow(true)
                 )
                 val b = com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds.Builder()
                     .include(route.points).build()
-                it.animateCamera(
+                map.animateCamera(
                     com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory.newLatLngBounds(
-                        b,
-                        MAP_PADDING
+                        b, MAP_PADDING
                     )
                 )
             }
+            navigator?.start(scope)
         })
 
+        // 电子眼指向箭头（画在最上层）。
+        if (state?.eye != null && eyeAnchor != null && camScreen != null) {
+            EyePointer(eyeAnchor!!, camScreen!!)
+        }
+
+        // 返回
         IconButton(
-            onClick = { navigator?.stop(); onExit() },
+            onClick = { endNav() },
             modifier = Modifier
                 .padding(12.dp)
                 .clip(RoundedCornerShape(50))
+                .background(Color.White.copy(0.9f))
                 .align(Alignment.TopStart)
         ) {
             Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Ink)
         }
 
-        Card(
-            shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = BrandPrimary),
-            modifier = Modifier
-                .padding(top = 60.dp)
-                .padding(horizontal = 14.dp)
-                .align(Alignment.TopCenter)
-        ) {
-            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.TurnRight,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
-                )
-                Column(Modifier.padding(start = 10.dp)) {
-                    Text(
-                        instruction,
-                        fontSize = 15.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        lane,
-                        fontSize = 11.sp,
-                        color = Color.White.copy(0.85f),
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                }
-            }
+        // 转向指令卡 + 车道引导
+        state?.let { s ->
+            InstructionCard(
+                s, Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 54.dp)
+                    .padding(horizontal = 18.dp)
+            )
         }
 
-        if (eyeOn) {
+        // 电子眼卡（含锚点测量）
+        state?.eye?.let { eye ->
             Card(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8ED)),
                 modifier = Modifier
-                    .padding(top = 168.dp)
-                    .padding(horizontal = 14.dp)
                     .align(Alignment.TopCenter)
+                    .padding(top = 192.dp)
+                    .padding(horizontal = 18.dp)
+                    .onGloballyPositioned { c ->
+                        val p = c.positionInRoot()
+                        eyeAnchor = Offset(p.x + c.size.width / 2f, p.y + c.size.height)
+                    }
             ) {
-                Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = BrandAccent)
-                    Column(Modifier.padding(start = 9.dp)) {
+                Row(
+                    Modifier.padding(vertical = 9.dp, horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(Color(0xFFFFE4B8)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Flag,
+                            contentDescription = null,
+                            tint = Color(0xFFC47A08),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Column(Modifier.padding(start = 8.dp)) {
                         Text(
-                            "电子眼提醒",
-                            fontSize = 12.5.sp,
+                            eye.title,
+                            fontSize = 11.sp,
                             color = Color(0xFF9A6705),
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "注意限速 · 保持安全车距",
-                            fontSize = 10.5.sp,
-                            color = Color(0xFFA98244)
-                        )
-                    }
-                    IconButton(onClick = { eyeOn = false }, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "关闭提醒",
-                            tint = Color(0xFFB27A10),
-                            modifier = Modifier.size(16.dp)
+                            eye.desc,
+                            fontSize = 9.sp,
+                            color = Color(0xFFA98244),
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     }
                 }
             }
         }
 
-        Surface(
-            shape = RoundedCornerShape(22.dp), color = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-        ) {
-            Column(Modifier.padding(18.dp)) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            "${(remain / 1000).coerceAtLeast(0.0)}".take(4), fontSize = 26.sp,
-                            fontWeight = FontWeight.Bold, color = BrandPrimary
-                        )
-                        Text("公里剩余", fontSize = 11.sp, color = MutedInk)
-                    }
-                    Text(
-                        "预计 ${maxOf(1, (100 - progress) / 4)} 分钟到达",
-                        fontSize = 11.5.sp,
-                        color = SubInk
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = progress / 100f, modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp),
-                    color = BrandPrimary, trackColor = Color(0xFFE7EFED)
-                )
-                Spacer(Modifier.height(14.dp))
-                Row(
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(
-                        6.dp
-                    )
-                ) {
-                    NavBtn(
-                        if (voice) "播报开" else "播报关",
-                        if (voice) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                        Modifier.weight(1f)
-                    ) {
-                        voice = !voice
-                    }
-                    NavBtn("设置", Icons.Default.CameraAlt, Modifier.weight(1f)) { }
-                    NavBtn(
-                        if (paused) "继续" else "暂停",
-                        if (paused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        Modifier.weight(1f)
-                    ) {
-                        paused = !paused
-                        navigator?.setPaused(paused)
-                        if (!paused && navigator == null) startNav()
-                    }
-                    NavBtn("结束", Icons.Default.Stop, Modifier.weight(1f), danger = true) {
-                        navigator?.stop(); onExit()
-                    }
-                }
-                Button(
-                    onClick = {
-                        if (navigator == null) startNav() else {
-                            navigator?.setPaused(false); paused = false
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
-                ) {
-                    Text(if (navigator == null) "开始模拟导航" else "继续模拟导航")
-                }
-            }
+        // 右侧 HUD：限速牌 / 车速表 / 海拔卡
+        state?.let { s ->
+            Hud(
+                s, Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 18.dp)
+            )
         }
-    }
 
-    LaunchedEffect(finished) {
-        if (finished) {
-            saveRecord(); navigator?.stop()
+        // 底部：剩余 / ETA / 进度 / 陪伴 + 结束
+        state?.let { s ->
+            BottomPanel(
+                s = s,
+                companionOn = companionOn,
+                onCompanion = { companionOn = !companionOn },
+                onEnd = { endNav() },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        // 陪伴模式覆盖层
+        if (companionOn && state != null) {
+            CompanionOverlay(
+                state!!,
+                onExitCompanion = { companionOn = false },
+                onEnd = { endNav() })
         }
     }
 }
 
 @Composable
-private fun NavBtn(
-    label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier,
-    danger: Boolean = false, onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick, modifier = modifier.height(44.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (danger) Color(0xFFFFF1EE) else Color(0xFFF5F8F8),
-            contentColor = if (danger) Color(0xFFD65B3B) else SubInk
-        ),
-        shape = RoundedCornerShape(12.dp)
+private fun InstructionCard(s: NavState, modifier: Modifier) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = modifier
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
-        Text(label, fontSize = 10.5.sp)
+        Column(
+            Modifier
+                .background(
+                    Brush.linearGradient(listOf(Color(0xFF0A5F5A), Color(0xFF0E8379)))
+                )
+                .padding(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White.copy(0.17f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.TurnRight,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(23.dp)
+                    )
+                }
+                Text(
+                    s.instruction,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(start = 9.dp)
+                )
+            }
+            Text(
+                s.lane,
+                fontSize = 9.5.sp,
+                color = Color.White.copy(0.85f),
+                modifier = Modifier.padding(top = 6.dp)
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                s.laneGuide.forEach { cell ->
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .height(29.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(
+                                if (cell.on) Color(0xFF5FE0A0).copy(0.24f)
+                                else Color.White.copy(0.1f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            cell.arrow,
+                            fontSize = 17.sp,
+                            color = if (cell.on) Color(0xFF6FF0B0) else Color(0xFFA9C6C2)
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun Hud(s: NavState, modifier: Modifier) {
+    val over = s.speed > s.speedLimit
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        // 限速牌
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .border(4.dp, Color(0xFFE8443A), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "${s.speedLimit}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Ink
+            )
+        }
+        Spacer(Modifier.height(7.dp))
+        Speedo(s.speed, over)
+        Spacer(Modifier.height(7.dp))
+        // 海拔卡
+        Column(
+            Modifier
+                .width(80.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF0E282B).copy(alpha = 0.86f))
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+            Text("当前海拔", fontSize = 8.sp, color = Color(0xFFBCDAD6))
+            Text(
+                "${s.altitude} m",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.padding(top = 1.dp)
+            )
+            Text(
+                s.altTrend,
+                fontSize = 7.5.sp,
+                color = if (s.altUp) Color(0xFF7EE0B0) else Color(0xFFFFD08A),
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun Speedo(speed: Int, over: Boolean) {
+    val ringColor = if (over) Color(0xFFFF7A5C) else Color(0xFF4FD1C0)
+    Box(
+        Modifier
+            .size(78.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF0E282B).copy(alpha = 0.86f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 5.dp.toPx()
+            val r = size.minDimension / 2f - stroke
+            drawArc(
+                color = Color.White.copy(alpha = 0.14f),
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = ringColor,
+                startAngle = -90f,
+                sweepAngle = 360f * (speed.coerceIn(0, 120) / 120f),
+                useCenter = false,
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "$speed",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                letterSpacing = (-1).sp
+            )
+            Text("km/h 车速", fontSize = 7.5.sp, color = Color(0xFFBCDAD6))
+        }
+    }
+}
+
+@Composable
+private fun BottomPanel(
+    s: NavState,
+    companionOn: Boolean,
+    onCompanion: () -> Unit,
+    onEnd: () -> Unit,
+    modifier: Modifier
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    "%.1f".format(s.remainMeters / 1000.0),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandPrimary
+                )
+                Text(" 公里剩余", fontSize = 11.sp, color = MutedInk)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "${maxOf(1, (100 - s.progress) / 4)} 分钟",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink
+                )
+                Text("预计到达", fontSize = 11.sp, color = SubInk)
+            }
+        }
+        Spacer(Modifier.height(13.dp))
+        LinearProgressIndicator(
+            progress = s.progress / 100f,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp),
+            color = BrandPrimary,
+            trackColor = Color(0xFFE7EFED)
+        )
+        Spacer(Modifier.height(13.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(
+                onClick = onCompanion,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BrandPrimary)
+            ) {
+                Icon(
+                    Icons.Default.Favorite,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(Modifier.width(3.dp))
+                Text(if (companionOn) "退出陪伴" else "陪伴模式", fontSize = 10.5.sp)
+            }
+            Button(
+                onClick = onEnd,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE8443A),
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(3.dp))
+                Text("结束", fontSize = 10.5.sp)
+            }
+        }
+    }
+}
+
+/** 电子眼卡底部中心指向地图相机标记的箭头。 */
+@Composable
+private fun EyePointer(from: Offset, to: Offset) {
+    val dx = to.x - from.x
+    val dy = to.y - from.y
+    if (dy <= 8f) return
+    val len = hypot(dx, dy)
+    Canvas(Modifier.fillMaxSize()) {
+        val end = from + Offset(dx, dy)
+        val stroke = 3.dp.toPx()
+        drawLine(
+            color = Color(0xFFF0A020),
+            start = from,
+            end = end,
+            strokeWidth = stroke
+        )
+        // 箭头
+        val backLen = 10.dp.toPx()
+        val ux = dx / len
+        val uy = dy / len
+        val back = end - Offset(ux * backLen, uy * backLen)
+        val perp = Offset(-uy, ux)
+        val p1 = back + Offset(perp.x * 6.dp.toPx(), perp.y * 6.dp.toPx())
+        val p2 = back - Offset(perp.x * 6.dp.toPx(), perp.y * 6.dp.toPx())
+        val path = Path().apply {
+            moveTo(end.x, end.y)
+            lineTo(p1.x, p1.y)
+            lineTo(p2.x, p2.y)
+            close()
+        }
+        drawPath(path, color = Color(0xFFF0A020))
+    }
+}
+
+/** 陪伴模式：全屏深色 HUD，左信号灯 · 中车速/电子眼 · 右转向灯。 */
+@Composable
+private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: () -> Unit) {
+    val over = s.speed > s.speedLimit
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF0C2B2A), Color(0xFF123A39), Color(0xFF0A2423))
+                )
+            )
+    ) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .padding(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 左：信号灯
+            Box(
+                Modifier
+                    .weight(0.85f)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color.White.copy(0.05f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    Modifier
+                        .clip(RoundedCornerShape(36.dp))
+                        .background(Color(0xFF051614))
+                        .padding(horizontal = 16.dp, vertical = 22.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    val redOn = s.redLight
+                    val greenOn = !s.redLight
+                    LampDot(if (redOn) Color(0xFFFF5F4D) else Color(0xFF1D3533))
+                    LampDot(Color(0xFF1D3533))
+                    LampDot(if (greenOn) Color(0xFF4FD39B) else Color(0xFF1D3533))
+                }
+            }
+            // 中：车速 + 电子眼
+            Column(
+                Modifier
+                    .weight(2.4f)
+                    .fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "${s.speed}",
+                    fontSize = 150.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (over) Color(0xFFFF5F4D) else Color(0xFF5FE0A8),
+                    letterSpacing = (-8).sp
+                )
+                Spacer(Modifier.height(20.dp))
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White.copy(0.06f))
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val dist = s.eye?.distance ?: 0
+                    val level = when {
+                        dist <= 100 -> CamNear
+                        dist <= 200 -> CamMid
+                        else -> CamFar
+                    }
+                    val lit = (dist / 50f).toInt().coerceIn(0, 10)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        repeat(10) { i ->
+                            Box(
+                                Modifier
+                                    .weight(1f)
+                                    .height(20.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(if (i < lit) level else Color(0xFF2A4744))
+                            )
+                        }
+                    }
+                    Text(
+                        s.eye?.title ?: "",
+                        fontSize = 11.sp,
+                        color = Color(0xFF5A8E88),
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
+            }
+            // 右：转向灯
+            Box(
+                Modifier
+                    .weight(0.85f)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(
+                        if (s.turnLight) Color(0xFFFFB648).copy(0.12f) else Color.White.copy(0.05f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.TurnRight,
+                    contentDescription = null,
+                    tint = if (s.turnLight) Color(0xFFFFB648) else Color(0xFF3F5D5A),
+                    modifier = Modifier.size(90.dp)
+                )
+            }
+        }
+
+        // 顶部操作
+        Row(
+            Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = onExitCompanion) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "退出陪伴", tint = Color.White)
+            }
+            IconButton(onClick = onEnd) {
+                Icon(Icons.Default.Flag, contentDescription = "结束", tint = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LampDot(color: Color) {
+    Box(
+        Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(color)
+    )
 }

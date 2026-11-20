@@ -73,6 +73,29 @@ data class StepInfo(
     val startIdx: Int
 )
 
+/** 车道引导格（箭头 + 是否推荐）。 */
+data class LaneCell(val arrow: String, val on: Boolean)
+
+/** 电子眼提醒信息。 */
+data class EyeInfo(val title: String, val desc: String, val distance: Int, val limit: Int)
+
+/** 导航中一帧状态（模拟导航统一产出，供 HUD / 陪伴模式渲染）。 */
+data class NavState(
+    val progress: Int,
+    val remainMeters: Double,
+    val instruction: String,
+    val lane: String,
+    val laneGuide: List<LaneCell>,
+    val speed: Int,
+    val speedLimit: Int,
+    val altitude: Int,
+    val altTrend: String,
+    val altUp: Boolean,
+    val eye: EyeInfo?,
+    val redLight: Boolean,
+    val turnLight: Boolean
+)
+
 /** 一条路线方案。 */
 data class RouteOption(
     val distanceText: String,
