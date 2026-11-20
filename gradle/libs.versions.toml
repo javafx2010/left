@@ -41,7 +41,9 @@ okhttp = "5.3.2"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
 datastorePreferences = "1.2.1"
-filament = "1.74.1"
+tencentMapSdk = "6.15.1.261013.3d797fb0.242708926"
+tencentOpenMapFoundation = "0.9.1.6875646"
+tencentSdkUtilities = "1.0.12"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -91,9 +93,9 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshiKotlin" }
 moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshiKotlinCodegen" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
-filament-android = { group = "com.google.android.filament", name = "filament-android", version.ref = "filament" }
-filament-gltfio-android = { group = "com.google.android.filament", name = "gltfio-android", version.ref = "filament" }
-filament-utils-android = { group = "com.google.android.filament", name = "filament-utils-android", version.ref = "filament" }
+tencent-map-vector-sdk = { group = "com.tencent.map", name = "tencent-map-vector-sdk", version.ref = "tencentMapSdk" }
+tencent-openmap-foundation = { group = "com.tencent.openmap", name = "foundation", version.ref = "tencentOpenMapFoundation" }
+tencent-sdk-utilities = { group = "com.tencent.map", name = "sdk-utilities", version.ref = "tencentSdkUtilities" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

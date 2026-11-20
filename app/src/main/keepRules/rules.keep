@@ -10,3 +10,11 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# Tencent Maps SDK / LBS Search (JNI, reflection, model deserialization)
+-keep class com.tencent.tencentmap.** { *; }
+-keep class com.tencent.map.** { *; }
+-keep class com.tencent.lbssearch.** { *; }
+-keep class com.tencent.mapsdk.** { *; }
+-keep class com.tencent.openmap.** { *; }
+-dontwarn com.tencent.**
