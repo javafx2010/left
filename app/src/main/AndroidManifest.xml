@@ -15,6 +15,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.WatchDog">
+        <meta-data
+            android:name="TencentMapSDK"
+            android:value="${TENCENT_MAP_SDK_KEY}" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

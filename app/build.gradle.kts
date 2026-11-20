@@ -1,4 +1,6 @@
-﻿plugins {
+﻿import javax.imageio.ImageIO
+
+plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
@@ -19,6 +21,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // 腾讯 SDK 6.x 通过 Manifest 的 TencentMapSDK meta-data 取全局 Key（token 中转通道需要）。
+        // 构建期从 assets/mapkey.png 的 LSB 解码，保持源码/脚本中无明文 Key。
+        manifestPlaceholders["TENCENT_MAP_SDK_KEY"] =
+            decodeMapKey(file("src/main/assets/mapkey.png"))
     }
 
     buildTypes {
@@ -91,4 +98,29 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     "ksp"(libs.androidx.room.compiler)
     "ksp"(libs.moshi.kotlin.codegen)
+}
+
+/** 从 assets/mapkey.png 的 RGB LSB 解码 Key，与 KeyProvider/encode_map_key.py 的位格式一致。 */
+fun decodeMapKey(file: File): String {
+    val img = ImageIO.read(file)
+    val bits = mutableListOf<Int>()
+    for (y in 0 until img.height) {
+        for (x in 0 until img.width) {
+            val c = img.getRGB(x, y)
+            bits.add((c shr 16) and 1)
+            bits.add((c shr 8) and 1)
+            bits.add(c and 1)
+        }
+    }
+    fun byteAt(i: Int): Int {
+        var v = 0
+        for (j in 0 until 8) v = (v shl 1) or bits[i + j]
+        return v
+    }
+
+    val magic = ByteArray(4) { byteAt(it * 8).toByte() }
+    require(magic.contentEquals(byteArrayOf(0x4C, 0x46, 0x54, 0x31))) { "mapkey.png magic 不匹配" }
+    val len = (byteAt(32) shl 8) or byteAt(40)
+    require(len in 1..512) { "mapkey.png 非法长度 $len" }
+    return ByteArray(len) { byteAt(48 + it * 8).toByte() }.decodeToString()
 }
