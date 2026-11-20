@@ -101,12 +101,19 @@ fun HomeScreen(appVm: AppViewModel) {
     var editing by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
     var pickingFor by remember { mutableStateOf<FavoritePlace?>(null) }
+    // 因“尚未设置定位点”而打开选点面板时，选完直接接着导航。
+    var navAfterPick by remember { mutableStateOf(false) }
     val recents = remember { mutableStateListOf<Recent>() }
     val scope = rememberCoroutineScope()
 
     fun go(place: FavoritePlace) {
-        // 直接点击：进入导航（有定位点就导航到该点，否则回退到当前位置）。
-        val latLng = place.latLng ?: currentLocation ?: return
+        val latLng = place.latLng
+        if (latLng == null) {
+            // 没有定位点：先让用户选点，选完再导航（避免起点终点相同）。
+            navAfterPick = true
+            pickingFor = place
+            return
+        }
         recents.add(0, Recent(place.name, "刚刚"))
         appVm.navigateTo(Poi(place.name, place.sub, latLng, "常用地点"))
     }
@@ -155,7 +162,12 @@ fun HomeScreen(appVm: AppViewModel) {
             items(places) { place ->
                 PlaceGridItem(place, editing, onClick = {
                     // 编辑模式：点卡片设置定位点；正常模式：一键出发导航。
-                    if (editing) pickingFor = place else go(place)
+                    if (editing) {
+                        navAfterPick = false
+                        pickingFor = place
+                    } else {
+                        go(place)
+                    }
                 }, onDelete = {
                     scope.launch { AppContainer.placeRepo.remove(place.id) }
                 })
@@ -210,10 +222,18 @@ fun HomeScreen(appVm: AppViewModel) {
         PlaceMapPicker(
             place = place,
             currentLocation = currentLocation,
-            onDismiss = { pickingFor = null },
+            onDismiss = {
+                pickingFor = null
+                navAfterPick = false
+            },
             onConfirm = { latLng ->
                 scope.launch { AppContainer.placeRepo.add(place.copy(latLng = latLng)) }
                 pickingFor = null
+                if (navAfterPick) {
+                    navAfterPick = false
+                    recents.add(0, Recent(place.name, "刚刚"))
+                    appVm.navigateTo(Poi(place.name, place.sub, latLng, "常用地点"))
+                }
             }
         )
     }

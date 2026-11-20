@@ -4,11 +4,14 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FavoritePlaceDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // 用 @Upsert 而不是 INSERT OR REPLACE：REPLACE 会先删除旧行再插入，
+    // 导致 rowid 变化，保存定位点后该地点会跳到网格末尾。
+    @Upsert
     suspend fun upsert(item: FavoritePlaceEntity)
 
     @Query("DELETE FROM favorite_places WHERE id = :id")
