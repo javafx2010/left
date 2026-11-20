@@ -50,7 +50,6 @@ import com.tencent.lbssearch.`object`.result.DrivingResultObject
 import com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory
 import com.tencent.tencentmap.mapsdk.maps.TencentMap
 import com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds
-import com.unic.watchdog.core.BEIJING
 import com.unic.watchdog.core.MAP_PADDING
 import com.unic.watchdog.map.TencentMapView
 import com.unic.watchdog.model.RouteOption
@@ -118,7 +117,7 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
     }
 
     fun plan() {
-        val from = currentLocation ?: BEIJING
+        val from = currentLocation ?: return
         val to = destination.latLng
         loading = true
         error = null
@@ -185,7 +184,9 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
     Box(Modifier.fillMaxSize()) {
         TencentMapView(Modifier.fillMaxSize(), onMapReady = {
             tencentMap = it
-            it.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLocation ?: BEIJING, 12f))
+            currentLocation?.let { loc ->
+                it.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 12f))
+            }
         })
 
         Column(

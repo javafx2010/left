@@ -3,10 +3,15 @@
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Application
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
-import com.google.android.gms.location.LocationServices
 import com.tencent.tencentmap.mapsdk.maps.model.LatLng
 import com.unic.watchdog.core.URUMQI
 import com.unic.watchdog.model.Poi
@@ -44,7 +49,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private var token = 0L
 
-    /** 启动时获取一次当前位置；无权限或定位失败时保持 null。 */
+    /** 持续接收定位更新，直到拿到首个有效位置为止。 */
+    private val locationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            _currentLocation.value = LatLng(location.latitude, location.longitude)
+            stopLocationUpdates()
+        }
+
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+        }
+    }
+
+    private fun locationManager(): LocationManager =
+        getApplication<Application>().getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+    /** 启动时自动获取当前位置；无权限或定位失败时保持 null。 */
     @SuppressLint("MissingPermission")
     fun refreshLocation() {
         val app = getApplication<Application>()
@@ -55,10 +78,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             app, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (!fine && !coarse) return
-        LocationServices.getFusedLocationProviderClient(app).lastLocation
-            .addOnSuccessListener { loc ->
-                if (loc != null) _currentLocation.value = LatLng(loc.latitude, loc.longitude)
+
+        val lm = locationManager()
+
+        // 先用最近一次已知位置（任意 provider）快速回填，避免地图空白等待。
+        val last = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        ).firstNotNullOfOrNull { p ->
+            try {
+                lm.getLastKnownLocation(p)
+            } catch (_: Exception) {
+                null
             }
+        }
+        if (last != null) _currentLocation.value = LatLng(last.latitude, last.longitude)
+
+        // 再主动请求定位更新（网络 + GPS）。用系统 LocationManager 而非 Google Fused，
+        // 兼容国内无 Google 定位服务的设备。
+        val providers = mutableListOf(LocationManager.NETWORK_PROVIDER)
+        if (fine) providers.add(LocationManager.GPS_PROVIDER)
+        providers.forEach { p ->
+            try {
+                lm.requestLocationUpdates(p, 5000L, 0f, locationListener, Looper.getMainLooper())
+            } catch (_: Exception) {
+                // 该 provider 不可用时忽略，继续尝试其它。
+            }
+        }
+    }
+
+    private fun stopLocationUpdates() {
+        try {
+            locationManager().removeUpdates(locationListener)
+        } catch (_: Exception) {
+        }
     }
 
     fun setTab(tab: Int) {
