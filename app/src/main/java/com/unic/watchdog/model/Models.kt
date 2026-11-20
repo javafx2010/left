@@ -85,5 +85,5 @@ data class RouteOption(
 )
 
 enum class TravelMode(val label: String) {
-    DRIVE("驾车"), TRANSIT("公交"), WALK("步行"), BIKE("骑行")
+    DRIVE("驾车")
 }

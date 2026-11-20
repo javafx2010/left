@@ -46,9 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tencent.lbssearch.HttpResponseListener
 import com.tencent.lbssearch.TencentSearch
 import com.tencent.lbssearch.`object`.param.DrivingParam
-import com.tencent.lbssearch.`object`.param.WalkingParam
 import com.tencent.lbssearch.`object`.result.DrivingResultObject
-import com.tencent.lbssearch.`object`.result.WalkingResultObject
 import com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory
 import com.tencent.tencentmap.mapsdk.maps.TencentMap
 import com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds
@@ -80,6 +78,7 @@ fun NavScreen(appVm: AppViewModel) {
 @Composable
 private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Unit) {
     val destination by appVm.navDestination.collectAsStateWithLifecycle()
+    val currentLocation by appVm.currentLocation.collectAsStateWithLifecycle()
     val focus by appVm.focusEvent.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -88,7 +87,7 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
         remember { TencentSearch(context, com.unic.watchdog.core.KeyProvider.get(context)) }
     val scope = rememberCoroutineScope()
 
-    var mode by remember { mutableStateOf(TravelMode.WALK) }
+    var mode by remember { mutableStateOf(TravelMode.DRIVE) }
     var routes by remember { mutableStateOf<List<RouteOption>>(emptyList()) }
     var selected by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(false) }
@@ -119,7 +118,7 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
     }
 
     fun plan() {
-        val from = BEIJING
+        val from = currentLocation ?: BEIJING
         val to = destination.latLng
         loading = true
         error = null
@@ -133,7 +132,6 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
                         loading = false
                         val parsed = when (result) {
                             is DrivingResultObject -> RouteParser.parseDriving(result)
-                            is WalkingResultObject -> RouteParser.parseWalking(result)
                             else -> emptyList()
                         }
                         val finalRoutes =
@@ -158,24 +156,13 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
                 }
             }
         @Suppress("UNCHECKED_CAST")
-        when (mode) {
-            TravelMode.DRIVE -> search.getRoutePlan(
-                DrivingParam(from, to),
-                listener as HttpResponseListener<DrivingResultObject>
-            )
-
-            TravelMode.WALK -> search.getRoutePlan(
-                WalkingParam(from, to),
-                listener as HttpResponseListener<WalkingResultObject>
-            )
-
-            else -> {
-                loading = false; error = "公交/骑行路线暂未开放，请使用驾车或步行"
-            }
-        }
+        search.getRoutePlan(
+            DrivingParam(from, to),
+            listener as HttpResponseListener<DrivingResultObject>
+        )
     }
 
-    LaunchedEffect(mode, destination.title) { plan() }
+    LaunchedEffect(mode, destination.title, currentLocation) { plan() }
     LaunchedEffect(focus.token) {
         if (focus.poi != null) {
             tencentMap?.let {
@@ -188,10 +175,17 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
         }
     }
 
+    // 定位结果到达后把地图移到当前位置（onMapReady 已处理先于地图就绪的情况）。
+    LaunchedEffect(currentLocation) {
+        currentLocation?.let { loc ->
+            tencentMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 12f))
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         TencentMapView(Modifier.fillMaxSize(), onMapReady = {
             tencentMap = it
-            it.animateCamera(CameraUpdateFactory.newLatLngZoom(BEIJING, 12f))
+            it.animateCamera(CameraUpdateFactory.newLatLngZoom(currentLocation ?: BEIJING, 12f))
         })
 
         Column(

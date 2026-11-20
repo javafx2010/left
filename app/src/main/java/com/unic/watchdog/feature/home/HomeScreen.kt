@@ -47,8 +47,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tencent.tencentmap.mapsdk.maps.model.LatLng
 import com.unic.watchdog.core.AppContainer
+import com.unic.watchdog.core.URUMQI
 import com.unic.watchdog.data.repository.EntityMappers
 import com.unic.watchdog.feature.common.PageTitle
 import com.unic.watchdog.feature.common.SectionTitle
@@ -75,19 +75,13 @@ fun HomeScreen(appVm: AppViewModel) {
 
     var editing by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
-    val recents = remember {
-        mutableStateListOf(
-            Recent("洱海生态廊道", "步行 · 3.2 公里 · 昨天 18:20"),
-            Recent("苍山洗马潭", "驾车 · 8.6 公里 · 11 月 18 日"),
-            Recent("大理凤仪机场", "驾车 · 16.4 公里 · 11 月 12 日")
-        )
-    }
+    val recents = remember { mutableStateListOf<Recent>() }
     val scope = rememberCoroutineScope()
 
     fun go(place: FavoritePlace) {
         val poi = place.latLng?.let { Poi(place.name, place.sub, it, "常用地点") }
-            ?: Poi(place.name, place.sub, LatLng(25.6065, 100.2676), "常用地点")
-        recents.add(0, Recent(place.name, "刚刚 · 步行 · 3.2 公里"))
+            ?: Poi(place.name, place.sub, URUMQI, "常用地点")
+        recents.add(0, Recent(place.name, "刚刚"))
         appVm.navigateTo(poi)
     }
 
@@ -161,7 +155,7 @@ fun HomeScreen(appVm: AppViewModel) {
         SectionTitle("最近导航", "今日")
         recents.forEach { r ->
             RecentRow(r, onClick = {
-                appVm.navigateTo(Poi(r.name, r.sub, LatLng(25.6065, 100.2676), "最近导航"))
+                appVm.navigateTo(Poi(r.name, r.sub, URUMQI, "最近导航"))
             })
         }
     }

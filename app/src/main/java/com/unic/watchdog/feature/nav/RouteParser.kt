@@ -2,7 +2,6 @@
 
 import com.tencent.lbssearch.`object`.result.DrivingResultObject
 import com.tencent.lbssearch.`object`.result.RoutePlanningObject
-import com.tencent.lbssearch.`object`.result.WalkingResultObject
 import com.tencent.tencentmap.mapsdk.maps.model.LatLng
 import com.unic.watchdog.model.RouteOption
 import com.unic.watchdog.model.StepInfo
@@ -30,20 +29,6 @@ object RouteParser {
         }
     }
 
-    fun parseWalking(obj: WalkingResultObject?): List<RouteOption> {
-        val routes = obj?.result?.routes.orEmpty()
-        return routes.map { r ->
-            RouteOption(
-                distanceText = formatDistance(r.distance),
-                durationText = formatDuration(r.duration),
-                distanceMeters = r.distance,
-                points = r.polyline.orEmpty(),
-                steps = mapSteps(r.steps),
-                desc = "步行 · 红绿灯 2 个"
-            )
-        }
-    }
-
     /** Key 未开启 WebServiceAPI 时的演示路线：起终点间生成带弯曲的折线。 */
     fun demoRoute(from: LatLng, to: LatLng, mode: TravelMode): RouteOption {
         val points = mutableListOf<LatLng>()
@@ -59,9 +44,7 @@ object RouteParser {
             points.add(LatLng(lat, lng))
         }
         val dist = distanceMeters(from, to).toFloat() * 1.3f
-        val speed = when (mode) {
-            TravelMode.DRIVE -> 500f; TravelMode.WALK -> 80f; else -> 250f
-        }
+        val speed = 500f
         val mins = (dist / speed).coerceAtLeast(1f)
         return RouteOption(
             distanceText = formatDistance(dist),

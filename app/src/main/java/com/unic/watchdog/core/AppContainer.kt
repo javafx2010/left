@@ -2,6 +2,8 @@
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.unic.watchdog.data.db.AppDatabase
 import com.unic.watchdog.data.repository.PlaceRepository
 import com.unic.watchdog.data.repository.RecordRepository
@@ -11,13 +13,25 @@ import com.unic.watchdog.data.repository.TripRepository
 object AppContainer {
     private var db: AppDatabase? = null
 
+    // v2：清除旧版原型示例数据，由 SeedData 重新写入默认常用地点。
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DELETE FROM favorite_places")
+            db.execSQL("DELETE FROM trips")
+            db.execSQL("DELETE FROM trip_points")
+            db.execSQL("DELETE FROM travel_records")
+        }
+    }
+
     fun init(context: Context) {
         if (db == null) {
             db = Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "watchdog.db"
-            ).build()
+            )
+                .addMigrations(MIGRATION_1_2)
+                .build()
         }
     }
 
