@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.unic.left"
+    namespace = "com.unic.watchdog"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.unic.left"
+        applicationId = "com.unic.watchdog"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
