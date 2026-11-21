@@ -80,6 +80,8 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
     var companionOn by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
     var lastInstruction by remember { mutableStateOf<String?>(null) }
+    // 顶部转向卡 / 电子眼提示条：进入导航默认收起，点击屏幕调出/收起。
+    var hudVisible by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         appVm.setNavigating(true)
@@ -163,34 +165,41 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
     }
 
     Box(Modifier.fillMaxSize()) {
-        TencentMapView(Modifier.fillMaxSize(), onMapReady = { map ->
-            navigator = NavigationTracker(context, map, route) { s ->
-                state = s
-                if (s.progress >= 100) finished = true
-                // 进入导航播报第一条指令，之后转向指令变化时播报。
-                if (lastInstruction == null) {
-                    speakNav(s, prefix = "开始导航，")
-                } else if (s.instruction != lastInstruction) {
-                    speakNav(s)
+        TencentMapView(
+            Modifier.fillMaxSize(),
+            onMapReady = { map ->
+                navigator = NavigationTracker(context, map, route) { s ->
+                    state = s
+                    if (s.progress >= 100) finished = true
+                    // 进入导航播报第一条指令，之后转向指令变化时播报。
+                    if (lastInstruction == null) {
+                        speakNav(s, prefix = "开始导航，")
+                    } else if (s.instruction != lastInstruction) {
+                        speakNav(s)
+                    }
+                    lastInstruction = s.instruction
                 }
-                lastInstruction = s.instruction
-            }
-            // 绘制完整路线（腾讯蓝）。
-            if (route.points.isNotEmpty()) {
-                map.addPolyline(
-                    com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions()
-                        .addAll(route.points).color(0xFF2D7FF9.toInt()).width(10f).arrow(true)
-                )
-                val b = com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds.Builder()
-                    .include(route.points).build()
-                map.animateCamera(
-                    com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory.newLatLngBounds(
-                        b, MAP_PADDING
+                // 绘制完整路线（腾讯蓝）。
+                if (route.points.isNotEmpty()) {
+                    map.addPolyline(
+                        com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions()
+                            .addAll(route.points).color(0xFF2D7FF9.toInt()).width(10f).arrow(true)
                     )
-                )
+                    val b = com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds.Builder()
+                        .include(route.points).build()
+                    map.animateCamera(
+                        com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory.newLatLngBounds(
+                            b, MAP_PADDING
+                        )
+                    )
+                }
+                navigator?.start()
+            },
+            onMapClick = {
+                // 点击地图切换顶部导航提示（转向卡 + 电子眼条）。
+                hudVisible = !hudVisible
             }
-            navigator?.start()
-        })
+        )
 
         // 转向指令卡 + 车道引导
         state?.let { s ->
@@ -257,15 +266,17 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
             )
         }
 
-        // 底部：剩余 / ETA / 进度 / 陪伴 + 结束
-        state?.let { s ->
-            BottomPanel(
-                s = s,
-                companionOn = companionOn,
-                onCompanion = { companionOn = !companionOn },
-                onEnd = { endNav() },
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+        // 底部：剩余 / ETA / 进度 / 陪伴 + 结束（进入导航默认收起，点击屏幕调出）
+        if (hudVisible) {
+            state?.let { s ->
+                BottomPanel(
+                    s = s,
+                    companionOn = companionOn,
+                    onCompanion = { companionOn = !companionOn },
+                    onEnd = { endNav() },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
         }
 
         // 陪伴模式覆盖层
