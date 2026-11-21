@@ -44,7 +44,6 @@ class NavigationTracker(
     private var traveledLine: Polyline? = null
     private var listener: LocationListener? = null
     private var paused = false
-    private var lastAltitude = 0.0
 
     // 原型电子眼数据（参考 travel-guide-prototype：0%/35%/68% 进度触发；真实导航 SDK 无引导引擎）。
     private val cams = listOf(
@@ -52,6 +51,9 @@ class NavigationTracker(
         35 to EyeInfo("前方 300 米 电子眼", "闯红灯抓拍 · 注意信号灯", 300, 60),
         68 to EyeInfo("区间测速路段", "全长 1.2 公里 · 平均限速 50 km/h", 800, 50)
     )
+
+    // 原型海拔数据（按进度阶段变化；真实 GPS 无海拔时兜底）。
+    private val alts = intArrayOf(1972, 1968, 1960, 1954)
 
     fun start() {
         stop()
@@ -153,11 +155,13 @@ class NavigationTracker(
         laneGuide: List<LaneCell>
     ): NavState {
         val speedKmh = if (location.hasSpeed()) (location.speed * 3.6).toInt() else 0
-        val alt = if (location.hasAltitude()) location.altitude.toInt() else 0
-        val delta = if (lastAltitude == 0.0) 0.0 else location.altitude - lastAltitude
-        lastAltitude = if (location.hasAltitude()) location.altitude else lastAltitude
-
         val pct = (progress * 100).toInt()
+        val phase = (pct / 25).coerceIn(0, 3)
+        // 真实 GPS 无海拔时用原型模拟海拔兜底，避免显示 0 m。
+        val alt = if (location.hasAltitude() && location.altitude > 0) location.altitude.toInt()
+        else alts[phase]
+        val delta = alt - (if (phase > 0) alts[phase - 1] else alts[0] + 4)
+
         val eye = cams.lastOrNull { pct >= it.first }?.second
         val speedLimit = eye?.limit ?: 60
 
@@ -171,8 +175,8 @@ class NavigationTracker(
             speedLimit = speedLimit,
             altitude = alt,
             altTrend = when {
-                delta > 0.5 -> "↑ 上升"
-                delta < -0.5 -> "↓ 缓降"
+                delta > 0 -> "↑ 爬坡 ${delta} m"
+                delta < 0 -> "↓ 下降 ${-delta} m"
                 else -> "→ 平稳"
             },
             altUp = delta >= 0,
