@@ -86,10 +86,11 @@ fun AppScaffold(appVm: AppViewModel = viewModel()) {
             }
         }
     ) { padding ->
+        // 导航中/陪伴模式去掉系统栏 padding，让深色 HUD / 地图铺满全屏（edge-to-edge）。
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .then(if (navigating) Modifier else Modifier.padding(padding))
         ) {
             when (selected) {
                 TAB_HOME -> HomeScreen(appVm)

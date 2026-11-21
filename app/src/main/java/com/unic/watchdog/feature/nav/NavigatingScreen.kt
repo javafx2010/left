@@ -46,9 +46,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import com.unic.watchdog.core.AppContainer
 import com.unic.watchdog.core.MAP_PADDING
 import com.unic.watchdog.map.TencentMapView
@@ -87,11 +89,23 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
 
     // 陪伴模式强制横屏；退出时恢复竖屏（configChanges 保证不重建，导航状态不丢失）。
     val activity = context as? android.app.Activity
+    val view = LocalView.current
     DisposableEffect(companionOn) {
         val act = activity
         if (companionOn && act != null) {
             act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            onDispose { act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+            // 深色 HUD 铺满全屏，状态栏/手势条图标改为浅色以保证可见。
+            WindowCompat.getInsetsController(act.window, view)?.apply {
+                isAppearanceLightStatusBars = false
+                isAppearanceLightNavigationBars = false
+            }
+            onDispose {
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                WindowCompat.getInsetsController(act.window, view)?.apply {
+                    isAppearanceLightStatusBars = true
+                    isAppearanceLightNavigationBars = true
+                }
+            }
         } else {
             onDispose { }
         }
