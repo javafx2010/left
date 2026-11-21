@@ -35,7 +35,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,12 +64,10 @@ import com.unic.watchdog.ui.theme.Ink
 import com.unic.watchdog.ui.theme.MutedInk
 import com.unic.watchdog.ui.theme.SubInk
 import com.unic.watchdog.util.formatDistance
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.sin
 
 @Composable
 fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit) {
@@ -464,45 +461,9 @@ private fun etaText(s: NavState): String {
 
 @Composable
 private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: () -> Unit) {
-    // 陪伴模式是 HUD 演示：用自身循环驱动信号灯/电子眼/右转灯/演示车速（与导航中页面的真实 GPS 跟踪无关）。
-    val speeds = intArrayOf(42, 64, 46, 28)
-    val limits = intArrayOf(60, 60, 50, 50)
-    val dists = intArrayOf(500, 300, 800, 200)
-    val reds = booleanArrayOf(true, false, true, false)
-    val turns = booleanArrayOf(true, false, true, false)
-
-    var demoStep by remember { mutableIntStateOf(0) }
-    var demoSpeed by remember { mutableIntStateOf(42) }
-    var demoDist by remember { mutableIntStateOf(500) }
-    var demoLimit by remember { mutableIntStateOf(60) }
-    var demoRed by remember { mutableStateOf(true) }
-    var demoTurn by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        var tick = 0
-        while (true) {
-            delay(700)
-            tick++
-            val phase = (tick / 20) % 4
-            val inPhase = (tick % 20) / 20f
-            demoStep = phase
-            demoSpeed =
-                (speeds[phase] + (if (phase % 2 == 0) 1 else -1) * (sin(tick * 0.9) * 2).toInt())
-                    .coerceAtLeast(0)
-            demoDist = (dists[phase] * (1f - inPhase)).toInt().coerceAtLeast(0)
-            demoLimit = limits[phase]
-            demoRed = reds[phase]
-            demoTurn = turns[phase]
-        }
-    }
-
-    val over = demoSpeed > demoLimit
-    val camLevel = when {
-        demoDist <= 100 -> Color(0xFFFF6A58)
-        demoDist <= 200 -> Color(0xFFFFC35C)
-        else -> Color(0xFF5FE0A8)
-    }
-    val camLit = (demoDist / 50f).toInt().coerceIn(0, 10)
+    // 全部用真实数据：车速/转向来自真实 GPS 与路线步骤；信号灯/电子眼无真实数据源则显示未激活。
+    val turnRight = s.lane.contains("右") || s.instruction.contains("右")
+    val over = s.speed >= 120
 
     Box(
         Modifier
@@ -537,9 +498,9 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                         .padding(horizontal = 16.dp, vertical = 22.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    LampDot(if (demoRed) Color(0xFFFF5F4D) else Color(0xFF1D3533))
                     LampDot(Color(0xFF1D3533))
-                    LampDot(if (!demoRed) Color(0xFF4FD39B) else Color(0xFF1D3533))
+                    LampDot(Color(0xFF1D3533))
+                    LampDot(Color(0xFF1D3533))
                 }
             }
 
@@ -553,7 +514,7 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
             ) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        "$demoSpeed",
+                        "${s.speed}",
                         fontSize = 150.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = if (over) Color(0xFFFF5F4D) else Color(0xFF5FE0A8),
@@ -579,13 +540,13 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        repeat(10) { i ->
+                        repeat(10) {
                             Box(
                                 Modifier
                                     .weight(1f)
                                     .height(20.dp)
                                     .clip(RoundedCornerShape(5.dp))
-                                    .background(if (i < camLit) camLevel else Color(0xFF2A4744))
+                                    .background(Color(0xFF2A4744))
                             )
                         }
                     }
@@ -599,11 +560,11 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                     .fillMaxSize()
                     .clip(RoundedCornerShape(22.dp))
                     .background(
-                        if (demoTurn) Color(0xFFFFB648).copy(0.12f) else Color.White.copy(0.05f)
+                        if (turnRight) Color(0xFFFFB648).copy(0.12f) else Color.White.copy(0.05f)
                     )
                     .border(
                         1.dp,
-                        if (demoTurn) Color(0xFFFFB648).copy(0.5f) else Color.White.copy(0.1f),
+                        if (turnRight) Color(0xFFFFB648).copy(0.5f) else Color.White.copy(0.1f),
                         RoundedCornerShape(22.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -611,7 +572,7 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                 Icon(
                     Icons.Default.TurnRight,
                     contentDescription = null,
-                    tint = if (demoTurn) Color(0xFFFFB648) else Color(0xFF3F5D5A),
+                    tint = if (turnRight) Color(0xFFFFB648) else Color(0xFF3F5D5A),
                     modifier = Modifier.size(110.dp)
                 )
             }
