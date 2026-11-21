@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -149,44 +146,50 @@ fun HomeScreen(appVm: AppViewModel) {
         }
 
         Spacer(Modifier.height(6.dp))
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(330.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            userScrollEnabled = false
-        ) {
-            items(places) { place ->
-                PlaceGridItem(place, editing, onClick = {
-                    // 编辑模式：点卡片设置定位点；正常模式：一键出发导航。
-                    if (editing) {
-                        navAfterPick = false
-                        pickingFor = place
+        // 常用地点：3 列网格（普通布局，避免 LazyGrid 嵌套 verticalScroll 拦截滚动）
+        (places + null).chunked(3).forEach { row ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { place ->
+                    if (place == null) {
+                        AddPlaceItem(onClick = { showAdd = true }, modifier = Modifier.weight(1f))
                     } else {
-                        go(place)
+                        PlaceGridItem(
+                            place,
+                            editing,
+                            onClick = {
+                                // 编辑模式：点卡片设置定位点；正常模式：一键出发导航。
+                                if (editing) {
+                                    navAfterPick = false
+                                    pickingFor = place
+                                } else {
+                                    go(place)
+                                }
+                            },
+                            onDelete = {
+                                scope.launch { AppContainer.placeRepo.remove(place.id) }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                }, onDelete = {
-                    scope.launch { AppContainer.placeRepo.remove(place.id) }
-                })
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
-            item {
-                AddPlaceItem(onClick = { showAdd = true })
-            }
+            Spacer(Modifier.height(12.dp))
         }
 
         SectionTitle("附近", "生活服务 · 一键直达")
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            userScrollEnabled = false
-        ) {
-            items(nearbyCategories) { cat ->
-                NearbyItem(cat)
+        nearbyCategories.chunked(4).forEach { row ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { NearbyItem(it, Modifier.weight(1f)) }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
+            Spacer(Modifier.height(12.dp))
         }
     }
 
@@ -232,11 +235,12 @@ private fun PlaceGridItem(
     place: FavoritePlace,
     editing: Boolean,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }) {
+        modifier = modifier.clickable { onClick() }) {
         Box {
             Box(
                 Modifier
@@ -284,10 +288,10 @@ private fun PlaceGridItem(
 }
 
 @Composable
-private fun AddPlaceItem(onClick: () -> Unit) {
+private fun AddPlaceItem(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }) {
+        modifier = modifier.clickable { onClick() }) {
         Box(
             Modifier
                 .size(56.dp)
@@ -325,10 +329,10 @@ private val nearbyCategories = listOf(
 )
 
 @Composable
-private fun NearbyItem(cat: NearbyCategory) {
+private fun NearbyItem(cat: NearbyCategory, modifier: Modifier = Modifier) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable {
+        modifier = modifier.clickable {
             // 原型阶段占位交互：后续可接真实 POI 检索。
         }) {
         Box(

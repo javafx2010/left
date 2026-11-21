@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,13 +50,10 @@ import com.tencent.lbssearch.`object`.param.DrivingParam
 import com.tencent.lbssearch.`object`.result.DrivingResultObject
 import com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory
 import com.tencent.tencentmap.mapsdk.maps.TencentMap
-import com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds
-import com.unic.watchdog.core.MAP_PADDING
 import com.unic.watchdog.map.TencentMapView
 import com.unic.watchdog.model.RouteOption
 import com.unic.watchdog.model.TravelMode
 import com.unic.watchdog.ui.AppViewModel
-import com.unic.watchdog.ui.TAB_SETTINGS
 import com.unic.watchdog.ui.theme.BrandPrimary
 import com.unic.watchdog.ui.theme.Ink
 import com.unic.watchdog.ui.theme.MutedInk
@@ -115,13 +111,30 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
             map.addMarker(
                 com.tencent.tencentmap.mapsdk.maps.model.MarkerOptions().position(from)
                     .title("起点")
+                    .icon(
+                        com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptorFactory
+                            .defaultMarker(210f)
+                    )
             )
             map.addMarker(
                 com.tencent.tencentmap.mapsdk.maps.model.MarkerOptions().position(to)
                     .title(destination.title)
+                    .icon(
+                        com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptorFactory
+                            .defaultMarker(30f)
+                    )
             )
-            val b = LatLngBounds.Builder().include(option.points).build()
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(b, MAP_PADDING))
+            // SDK 官方方法：按路线点 + 四周 padding 计算能完整显示的相机（缩略全程）。
+            val camPos = map.calculateZoomToSpanLevel(
+                emptyList(),
+                option.points,
+                80, 200, 80, 560
+            )
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(camPos))
+            // 地图加载可能随后覆盖 zoom，延迟再设置一次确保缩略全程。
+            mainHandler.postDelayed({
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(camPos))
+            }, 600)
         }
     }
 
@@ -183,19 +196,10 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
         }
     }
 
-    // 定位结果到达后把地图移到当前位置（onMapReady 已处理先于地图就绪的情况）。
-    LaunchedEffect(currentLocation) {
-        currentLocation?.let { loc ->
-            tencentMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 12f))
-        }
-    }
-
     Box(Modifier.fillMaxSize()) {
         TencentMapView(Modifier.fillMaxSize(), onMapReady = {
             tencentMap = it
-            currentLocation?.let { loc ->
-                it.animateCamera(CameraUpdateFactory.newLatLngZoom(loc, 12f))
-            }
+            // 初始相机由 drawRoute 统一设置（缩略显示全程），这里不再缩放。
         })
 
         Column(
@@ -301,21 +305,6 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
                         Spacer(Modifier.size(6.dp))
                         Text("· ${mode.label}", fontSize = 11.sp, color = MutedInk, maxLines = 1)
                     }
-                    Column(Modifier.padding(top = 12.dp)) {
-                        opt.steps.take(4).forEach { s ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier
-                                        .size(7.dp)
-                                        .clip(RoundedCornerShape(50))
-                                        .background(BrandPrimary)
-                                )
-                                Spacer(Modifier.size(9.dp))
-                                Text(s.instruction, fontSize = 11.5.sp, color = SubInk)
-                            }
-                            Spacer(Modifier.height(6.dp))
-                        }
-                    }
                     if (routes.size > 1) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -342,31 +331,6 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
                             null
                         ); Spacer(Modifier.size(6.dp)); Text("开始导航")
                     }
-                }
-            }
-        }
-
-        // 右侧浮动设置按钮（跳转到设置页）
-        Column(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color.White,
-                shadowElevation = 3.dp
-            ) {
-                IconButton(onClick = {
-                    appVm.exitNav()
-                    appVm.setTab(TAB_SETTINGS)
-                }) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "导航设置",
-                        tint = BrandPrimary
-                    )
                 }
             }
         }
