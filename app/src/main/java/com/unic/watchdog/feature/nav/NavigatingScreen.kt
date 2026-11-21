@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.TurnRight
@@ -201,6 +202,52 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
             )
         }
 
+        // 电子眼 / 测速摄像头提示条
+        state?.eye?.let { eye ->
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8ED)),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 190.dp)
+                    .padding(horizontal = 18.dp)
+            ) {
+                Row(
+                    Modifier.padding(vertical = 9.dp, horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(Color(0xFFFFE4B8)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = Color(0xFFC47A08),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Column(Modifier.padding(start = 8.dp)) {
+                        Text(
+                            eye.title,
+                            fontSize = 11.sp,
+                            color = Color(0xFF9A6705),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            eye.desc,
+                            fontSize = 9.sp,
+                            color = Color(0xFFA98244),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // 右侧 HUD：车速表 / 海拔卡
         state?.let { s ->
             Hud(
@@ -306,7 +353,24 @@ private fun InstructionCard(s: NavState, modifier: Modifier) {
 @Composable
 private fun Hud(s: NavState, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Speedo(s.speed, s.speed >= 120)
+        // 限速牌（白底红边圆形）
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .border(4.dp, Color(0xFFE8443A), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "${s.speedLimit}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Ink
+            )
+        }
+        Spacer(Modifier.height(7.dp))
+        Speedo(s.speed, s.speed > s.speedLimit)
         Spacer(Modifier.height(7.dp))
         // 海拔卡
         Column(
