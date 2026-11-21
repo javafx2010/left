@@ -77,9 +77,11 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
     var finished by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
+        appVm.setNavigating(true)
         onDispose {
             navigator?.stop()
             appVm.setPaused(false)
+            appVm.setNavigating(false)
         }
     }
 

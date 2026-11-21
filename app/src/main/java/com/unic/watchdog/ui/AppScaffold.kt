@@ -40,6 +40,7 @@ private data class TabItem(val label: String, val icon: ImageVector)
 @Composable
 fun AppScaffold(appVm: AppViewModel = viewModel()) {
     val selected by appVm.selectedTab.collectAsStateWithLifecycle()
+    val navigating by appVm.navigating.collectAsStateWithLifecycle()
 
     // 启动即申请定位权限，授权后取一次当前位置供地图/导航使用。
     val locationPermission =
@@ -61,24 +62,26 @@ fun AppScaffold(appVm: AppViewModel = viewModel()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selected == index,
-                        onClick = { appVm.setTab(index) },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandPrimary,
-                            selectedTextColor = BrandPrimary,
-                            unselectedIconColor = MutedInk,
-                            unselectedTextColor = MutedInk,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+            if (!navigating) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        NavigationBarItem(
+                            selected = selected == index,
+                            onClick = { appVm.setTab(index) },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = BrandPrimary,
+                                selectedTextColor = BrandPrimary,
+                                unselectedIconColor = MutedInk,
+                                unselectedTextColor = MutedInk,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

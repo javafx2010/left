@@ -58,6 +58,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _navSettings = MutableStateFlow(NavSettings())
     val navSettings: StateFlow<NavSettings> = _navSettings.asStateFlow()
 
+    /** 是否处于导航中（沉浸式，隐藏底部 tab 栏）。 */
+    private val _navigating = MutableStateFlow(false)
+    val navigating: StateFlow<Boolean> = _navigating.asStateFlow()
+
     private var token = 0L
 
     /** 持续接收定位更新，直到拿到首个有效位置为止。 */
@@ -157,5 +161,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setVolume(volume: Int) {
         _navSettings.value = _navSettings.value.copy(volume = volume)
+    }
+
+    fun setNavigating(value: Boolean) {
+        _navigating.value = value
     }
 }
