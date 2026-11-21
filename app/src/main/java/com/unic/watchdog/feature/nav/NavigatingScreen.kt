@@ -542,24 +542,45 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                     lineHeight = 140.sp
                 )
                 Spacer(Modifier.height(20.dp))
+                // 接受导航回调显示的真实数据：当前转向指令 + 剩余里程 / 预计到达
                 Column(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color.White.copy(0.06f))
                         .border(1.dp, Color.White.copy(0.12f), RoundedCornerShape(18.dp))
-                        .padding(20.dp),
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        repeat(10) {
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .height(20.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(Color(0xFF2A4744))
+                    Text(
+                        s.instruction,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 2
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "%.1f".format(s.remainMeters / 1000.0),
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
+                            Text("剩余公里", fontSize = 10.sp, color = Color(0xFF5A8E88))
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                etaText(s),
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text("预计到达", fontSize = 10.sp, color = Color(0xFF5A8E88))
                         }
                     }
                 }
