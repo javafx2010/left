@@ -78,6 +78,7 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
     var navigator by remember { mutableStateOf<NavigationTracker?>(null) }
     var companionOn by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
+    var lastInstruction by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         appVm.setNavigating(true)
@@ -132,7 +133,20 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
         navigator?.stop()
         navigator = null
         appVm.setPaused(false)
+        AppContainer.ttsSpeaker.stop()
         onExit()
+    }
+
+    // 转向指令变化时语音播报（受导航播报开关与模式控制）。
+    fun speakNav(s: NavState, prefix: String = "") {
+        val st = appVm.navSettings.value
+        if (!st.voiceOn) return
+        val text = when (st.voiceMode) {
+            "静音" -> return
+            "简洁" -> s.lane.substringBefore(" · ").ifBlank { s.instruction }
+            else -> s.instruction
+        }
+        AppContainer.ttsSpeaker.speak(prefix + text)
     }
 
     // 我的页「暂停导航」开关联动到跟踪器。
@@ -152,6 +166,13 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
             navigator = NavigationTracker(context, map, route) { s ->
                 state = s
                 if (s.progress >= 100) finished = true
+                // 进入导航播报第一条指令，之后转向指令变化时播报。
+                if (lastInstruction == null) {
+                    speakNav(s, prefix = "开始导航，")
+                } else if (s.instruction != lastInstruction) {
+                    speakNav(s)
+                }
+                lastInstruction = s.instruction
             }
             // 绘制完整路线（腾讯蓝）。
             if (route.points.isNotEmpty()) {
