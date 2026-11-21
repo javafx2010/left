@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Icon
@@ -28,7 +27,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.unic.watchdog.feature.home.HomeScreen
-import com.unic.watchdog.feature.mine.MineScreen
 import com.unic.watchdog.feature.nav.NavScreen
 import com.unic.watchdog.feature.trip.TripScreen
 import com.unic.watchdog.ui.theme.BrandPrimary
@@ -55,8 +53,7 @@ fun AppScaffold(appVm: AppViewModel = viewModel()) {
     val tabs = listOf(
         TabItem("首页", Icons.Default.Home),
         TabItem("行程", Icons.Default.Route),
-        TabItem("导航", Icons.Default.Place),
-        TabItem("我的", Icons.Default.Person)
+        TabItem("导航", Icons.Default.Place)
     )
 
     Scaffold(
@@ -96,7 +93,6 @@ fun AppScaffold(appVm: AppViewModel = viewModel()) {
                 TAB_HOME -> HomeScreen(appVm)
                 TAB_TRIP -> TripScreen(appVm)
                 TAB_NAV -> NavScreen(appVm)
-                TAB_MINE -> MineScreen(appVm)
             }
         }
     }

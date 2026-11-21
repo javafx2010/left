@@ -512,23 +512,14 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        "${s.speed}",
-                        fontSize = 150.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (over) Color(0xFFFF5F4D) else Color(0xFF5FE0A8),
-                        letterSpacing = (-8).sp,
-                        lineHeight = 140.sp
-                    )
-                    Text(
-                        " km/h",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF9CD9D2),
-                        modifier = Modifier.padding(start = 10.dp, bottom = 18.dp)
-                    )
-                }
+                Text(
+                    "${s.speed}",
+                    fontSize = 150.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = if (over) Color(0xFFFF5F4D) else Color(0xFF5FE0A8),
+                    letterSpacing = (-8).sp,
+                    lineHeight = 140.sp
+                )
                 Spacer(Modifier.height(20.dp))
                 Column(
                     Modifier

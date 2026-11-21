@@ -19,11 +19,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** 4 tab：首页 / 行程 / 导航 / 我的。 */
+/** 3 tab：首页 / 行程 / 导航。 */
 const val TAB_HOME = 0
 const val TAB_TRIP = 1
 const val TAB_NAV = 2
-const val TAB_MINE = 3
 
 data class FocusEvent(val poi: Poi?, val token: Long = 0L)
 

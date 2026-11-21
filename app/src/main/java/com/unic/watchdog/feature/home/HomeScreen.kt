@@ -22,15 +22,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,8 +69,6 @@ import com.unic.watchdog.map.TencentMapView
 import com.unic.watchdog.model.FavoritePlace
 import com.unic.watchdog.model.Poi
 import com.unic.watchdog.ui.AppViewModel
-import com.unic.watchdog.ui.TAB_MINE
-import com.unic.watchdog.ui.TAB_TRIP
 import com.unic.watchdog.ui.theme.BrandPrimary
 import com.unic.watchdog.ui.theme.Ink
 import com.unic.watchdog.ui.theme.MutedInk
@@ -114,7 +109,7 @@ fun HomeScreen(appVm: AppViewModel) {
             pickingFor = place
             return
         }
-        recents.add(0, Recent(place.name, "刚刚"))
+        recents.add(0, Recent(place.name, "驾车 · 刚刚"))
         appVm.navigateTo(Poi(place.name, place.sub, latLng, "常用地点"))
     }
 
@@ -177,22 +172,6 @@ fun HomeScreen(appVm: AppViewModel) {
             }
         }
 
-        SectionTitle("快捷入口", "常用功能")
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickCard(
-                Icons.Default.Route,
-                "编辑行程",
-                "添加路径点",
-                Modifier.weight(1f)
-            ) { appVm.setTab(TAB_TRIP) }
-            QuickCard(
-                Icons.Default.History,
-                "行程记录",
-                "查看历史轨迹",
-                Modifier.weight(1f)
-            ) { appVm.setTab(TAB_MINE) }
-        }
-
         SectionTitle("最近导航", "今日")
         recents.forEach { r ->
             RecentRow(r, onClick = {
@@ -231,7 +210,7 @@ fun HomeScreen(appVm: AppViewModel) {
                 pickingFor = null
                 if (navAfterPick) {
                     navAfterPick = false
-                    recents.add(0, Recent(place.name, "刚刚"))
+                    recents.add(0, Recent(place.name, "驾车 · 刚刚"))
                     appVm.navigateTo(Poi(place.name, place.sub, latLng, "常用地点"))
                 }
             }
@@ -285,6 +264,13 @@ private fun PlaceGridItem(
         }
         Spacer(Modifier.height(6.dp))
         Text(place.name, fontSize = 11.5.sp, color = SubInk, maxLines = 1)
+        Text(
+            place.sub,
+            fontSize = 8.5.sp,
+            color = MutedInk,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 2.dp)
+        )
     }
 }
 
@@ -315,30 +301,6 @@ private fun AddPlaceItem(onClick: () -> Unit) {
         }
         Spacer(Modifier.height(6.dp))
         Text("添加地点", fontSize = 11.5.sp, color = BrandPrimary)
-    }
-}
-
-@Composable
-private fun QuickCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, sub: String,
-    modifier: Modifier = Modifier, onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier.clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(0.dp),
-        shape = RoundedCornerShape(15.dp)
-    ) {
-        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(
-                icon,
-                contentDescription = title,
-                tint = BrandPrimary,
-                modifier = Modifier.size(19.dp)
-            )
-            Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Ink)
-            Text(sub, fontSize = 10.sp, color = MutedInk)
-        }
     }
 }
 

@@ -49,16 +49,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.unic.watchdog.core.AppContainer
+import com.unic.watchdog.data.repository.EntityMappers
 import com.unic.watchdog.data.repository.GuideRepository
 import com.unic.watchdog.feature.common.PageTitle
 import com.unic.watchdog.feature.common.SectionTitle
 import com.unic.watchdog.map.TencentMapView
+import com.unic.watchdog.model.TravelRecord
 import com.unic.watchdog.model.TripPoint
 import com.unic.watchdog.ui.AppViewModel
 import com.unic.watchdog.ui.theme.BrandAccent
 import com.unic.watchdog.ui.theme.BrandPrimary
 import com.unic.watchdog.ui.theme.Ink
 import com.unic.watchdog.ui.theme.MutedInk
+import com.unic.watchdog.ui.theme.SubInk
 import com.unic.watchdog.ui.theme.SurfaceTint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -72,9 +75,16 @@ private sealed interface TripRoute {
 @Composable
 fun TripScreen(appVm: AppViewModel) {
     var route by remember { mutableStateOf<TripRoute>(TripRoute.List) }
+    var detail by remember { mutableStateOf<TravelRecord?>(null) }
     val scope = rememberCoroutineScope()
+    if (detail != null) {
+        RecordDetail(record = detail!!, onBack = { detail = null })
+        return
+    }
     when (val r = route) {
-        TripRoute.List -> TripListScreen(onOpen = { route = TripRoute.Edit(it) })
+        TripRoute.List -> TripListScreen(
+            onOpen = { route = TripRoute.Edit(it) },
+            onOpenRecord = { detail = it })
         is TripRoute.Edit -> TripEditScreen(
             r.id,
             onBack = { route = TripRoute.List },
@@ -100,8 +110,10 @@ fun TripScreen(appVm: AppViewModel) {
 }
 
 @Composable
-private fun TripListScreen(onOpen: (Long) -> Unit) {
+private fun TripListScreen(onOpen: (Long) -> Unit, onOpenRecord: (TravelRecord) -> Unit) {
     val entities by remember { AppContainer.tripRepo.observeAll() }.collectAsState(initial = emptyList())
+    val recordEntities by remember { AppContainer.recordRepo.observeAll() }.collectAsState(initial = emptyList())
+    val records = recordEntities.map { EntityMappers.record(it) }
     val pointsMaps =
         remember { mutableMapOf<Long, List<com.unic.watchdog.data.db.TripPointEntity>>() }
     val scope = rememberCoroutineScope()
@@ -130,6 +142,12 @@ private fun TripListScreen(onOpen: (Long) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             InfoCard("一键导航", "按路径点顺序", Icons.Default.Place, Modifier.weight(1f))
             InfoCard("地图选点", "添加新路径点", Icons.Default.Place, Modifier.weight(1f))
+        }
+
+        // 行程记录（并入行程页下半部分）
+        SectionTitle("行程记录", "共 ${records.size} 条")
+        records.forEach { r ->
+            RecordCard(r, onClick = { onOpenRecord(r) })
         }
     }
 }
@@ -465,6 +483,111 @@ private fun MapPickerScreen(onBack: () -> Unit, onConfirm: (String, Double, Doub
             ) {
                 Text("确定为路径点")
             }
+        }
+    }
+}
+
+@Composable
+private fun RecordCard(record: TravelRecord, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(Modifier.padding(11.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(record.title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Text(record.date, fontSize = 10.5.sp, color = MutedInk)
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(SurfaceTint),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text("  ●━━━━━━━━━━●  ", color = BrandPrimary, fontSize = 16.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("${record.distanceText} 公里", fontSize = 10.5.sp, color = SubInk)
+                Text("${record.durationText} 用时", fontSize = 10.5.sp, color = SubInk)
+                Text(
+                    "${record.mode} · ${record.pointNames.size} 个点",
+                    fontSize = 10.5.sp,
+                    color = SubInk
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordDetail(record: TravelRecord, onBack: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+    ) {
+        IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "返回") }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SurfaceTint),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("●━━━━━━━━●━━━━━━●", color = BrandPrimary, fontSize = 22.sp)
+        }
+        SectionTitle(record.title, record.date)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DetailStat(record.distanceText, "公里", Modifier.weight(1f))
+            DetailStat(record.durationText, "用时", Modifier.weight(1f))
+            DetailStat("${record.pointNames.size}", "路径点", Modifier.weight(1f))
+        }
+        SectionTitle("途经路径点", record.mode)
+        record.pointNames.forEachIndexed { i, name ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(9.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            if (i == record.pointNames.lastIndex) BrandPrimary else BrandPrimary.copy(
+                                0.5f
+                            )
+                        )
+                )
+                Text("  第 ${i + 1} 站 · $name", fontSize = 11.5.sp, color = SubInk)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailStat(value: String, label: String, modifier: Modifier) {
+    Card(
+        modifier = modifier, colors = CardDefaults.cardColors(containerColor = SurfaceTint),
+        shape = RoundedCornerShape(13.dp)
+    ) {
+        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = BrandPrimary)
+            Text(label, fontSize = 10.sp, color = MutedInk)
         }
     }
 }
