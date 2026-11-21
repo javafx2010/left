@@ -179,30 +179,12 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
                     }
                     lastInstruction = s.instruction
                 }
-                // 绘制完整路线：分段用颜色表达拥堵（绿=畅通 / 黄=缓行 / 红=拥堵 / 深红=严重拥堵）。
+                // 绘制完整路线（腾讯蓝）。
                 if (route.points.isNotEmpty()) {
-                    val trafficColors = listOf(
-                        0xFF00C853.toInt(), // 绿 畅通
-                        0xFFFFC107.toInt(), // 黄 缓行
-                        0xFFE53935.toInt(), // 红 拥堵
-                        0xFF8B0000.toInt()  // 深红 严重拥堵
+                    map.addPolyline(
+                        com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions()
+                            .addAll(route.points).color(0xFF2D7FF9.toInt()).width(10f).arrow(true)
                     )
-                    val n = route.points.size
-                    val segments = 8
-                    val segSize = (n + segments - 1) / segments
-                    for (i in 0 until segments) {
-                        val start = i * segSize
-                        val end = minOf((i + 1) * segSize, n)
-                        if (start >= n || end - start < 2) continue
-                        // 确定性模拟拥堵分布（真实 SDK 无逐段路况，参考原型填充）。
-                        val level = (i * 3 + 1) % 4
-                        map.addPolyline(
-                            com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions()
-                                .addAll(route.points.subList(start, end))
-                                .color(trafficColors[level])
-                                .width(10f)
-                        )
-                    }
                     val b = com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds.Builder()
                         .include(route.points).build()
                     map.animateCamera(
