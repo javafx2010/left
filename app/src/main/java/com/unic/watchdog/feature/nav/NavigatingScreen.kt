@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.TurnRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,7 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.unic.watchdog.core.AppContainer
-import com.unic.watchdog.core.MAP_PADDING
 import com.unic.watchdog.map.TencentMapView
 import com.unic.watchdog.model.NavState
 import com.unic.watchdog.model.RouteOption
@@ -185,14 +185,8 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
                         com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions()
                             .addAll(route.points).color(0xFF2D7FF9.toInt()).width(10f).arrow(true)
                     )
-                    val b = com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds.Builder()
-                        .include(route.points).build()
-                    map.animateCamera(
-                        com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory.newLatLngBounds(
-                            b, MAP_PADDING
-                        )
-                    )
                 }
+                // 导航跟随视角由 NavigationTracker.start() 设置（车辆在屏幕下方）。
                 navigator?.start()
             },
             onMapClick = {
@@ -211,47 +205,94 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
             )
         }
 
-        // 电子眼 / 测速摄像头提示条
-        state?.eye?.let { eye ->
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8ED)),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 190.dp)
-                    .padding(horizontal = 18.dp)
-            ) {
-                Row(
-                    Modifier.padding(vertical = 9.dp, horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // 电子眼 / 测速摄像头提示条 + 服务区距离提醒
+        Column(
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 190.dp)
+                .padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            state?.eye?.let { eye ->
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8ED)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(Color(0xFFFFE4B8)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        Modifier.padding(vertical = 9.dp, horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.CameraAlt,
-                            contentDescription = null,
-                            tint = Color(0xFFC47A08),
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Box(
+                            Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(Color(0xFFFFE4B8)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                tint = Color(0xFFC47A08),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(
+                                eye.title,
+                                fontSize = 11.sp,
+                                color = Color(0xFF9A6705),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                eye.desc,
+                                fontSize = 9.sp,
+                                color = Color(0xFFA98244),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
-                    Column(Modifier.padding(start = 8.dp)) {
-                        Text(
-                            eye.title,
-                            fontSize = 11.sp,
-                            color = Color(0xFF9A6705),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            eye.desc,
-                            fontSize = 9.sp,
-                            color = Color(0xFFA98244),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+                }
+            }
+
+            state?.service?.let { svc ->
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF7F4)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(vertical = 9.dp, horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(Color(0xFFCDEBE4)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.LocalGasStation,
+                                contentDescription = null,
+                                tint = Color(0xFF0E7C74),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(
+                                svc.title,
+                                fontSize = 11.sp,
+                                color = Color(0xFF0A5F5A),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                svc.desc,
+                                fontSize = 9.sp,
+                                color = Color(0xFF3E7F78),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
                 }
             }

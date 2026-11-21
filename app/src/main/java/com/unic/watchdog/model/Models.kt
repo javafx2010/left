@@ -79,6 +79,14 @@ data class LaneCell(val arrow: String, val on: Boolean)
 /** 电子眼提醒信息。 */
 data class EyeInfo(val title: String, val desc: String, val distance: Int, val limit: Int)
 
+/** 服务区提醒信息。 */
+data class ServiceInfo(
+    val title: String,
+    val desc: String,
+    val distance: Int,
+    val facilities: List<String> = emptyList()
+)
+
 /** 导航中一帧状态（模拟导航统一产出，供 HUD / 陪伴模式渲染）。 */
 data class NavState(
     val progress: Int,
@@ -92,6 +100,7 @@ data class NavState(
     val altTrend: String,
     val altUp: Boolean,
     val eye: EyeInfo?,
+    val service: ServiceInfo?,
     val redLight: Boolean,
     val turnLight: Boolean
 )

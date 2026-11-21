@@ -10,6 +10,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
+import com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory
 import com.tencent.tencentmap.mapsdk.maps.TencentMap
 import com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptorFactory
 import com.tencent.tencentmap.mapsdk.maps.model.LatLng
@@ -41,6 +42,7 @@ class NavigationTracker(
     private val total = cum.lastOrNull() ?: 0.0
 
     private var marker: Marker? = null
+    private var endMarker: Marker? = null
     private var traveledLine: Polyline? = null
     private var listener: LocationListener? = null
     private var paused = false
@@ -65,6 +67,16 @@ class NavigationTracker(
                 .anchor(0.5f, 0.5f)
                 .title("当前位置")
         )
+        // 终点橙色图钉
+        endMarker = map.addMarker(
+            MarkerOptions()
+                .position(route.points.last())
+                .icon(BitmapDescriptorFactory.defaultMarker(30f))
+                .title("终点")
+        )
+        // 导航跟随视角：相机中心偏上，让当前位置（车辆）显示在屏幕下方。
+        map.setCameraCenterProportion(0.5f, 0.75f)
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(route.points.first(), 16f))
         traveledLine = map.addPolyline(
             PolylineOptions().color(0xFF3CB5A7.toInt()).width(10f)
         )
@@ -73,6 +85,8 @@ class NavigationTracker(
                 if (paused) return
                 val ll = LatLng(location.latitude, location.longitude)
                 marker?.position = ll
+                // 相机跟随当前位置。
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(ll, 16f))
 
                 val traveled = projectToRoute(route.points, cum, ll)
                 val idx = indexAt(traveled)
@@ -141,6 +155,8 @@ class NavigationTracker(
         listener = null
         marker?.remove()
         marker = null
+        endMarker?.remove()
+        endMarker = null
         traveledLine?.remove()
         traveledLine = null
         paused = false
@@ -181,6 +197,7 @@ class NavigationTracker(
             },
             altUp = delta >= 0,
             eye = eye,
+            service = null,
             redLight = false,
             turnLight = false
         )

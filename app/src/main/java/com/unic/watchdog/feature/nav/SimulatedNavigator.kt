@@ -10,6 +10,7 @@ import com.unic.watchdog.model.EyeInfo
 import com.unic.watchdog.model.LaneCell
 import com.unic.watchdog.model.NavState
 import com.unic.watchdog.model.RouteOption
+import com.unic.watchdog.model.ServiceInfo
 import com.unic.watchdog.util.cumulativeDistances
 import com.unic.watchdog.util.interpolate
 import kotlinx.coroutines.CoroutineScope
@@ -144,6 +145,30 @@ class SimulatedNavigator(
         Triple(68, 800, EyeInfo("区间测速路段", "全长 1.2 公里 · 平均限速 50 km/h", 800, 50))
     )
 
+    /** 服务区提醒（沿路线出现两处）。 */
+    private val services = listOf(
+        Triple(
+            20,
+            1500,
+            ServiceInfo(
+                "前方 1.5 公里 洱海服务区",
+                "加油 · 餐饮 · 停车 · 卫生间",
+                1500,
+                listOf("加油", "餐饮", "停车", "卫生间")
+            )
+        ),
+        Triple(
+            55,
+            2000,
+            ServiceInfo(
+                "前方 2 公里 喜洲服务区",
+                "充电 · 便利店 · 休息区",
+                2000,
+                listOf("充电", "便利店", "休息")
+            )
+        )
+    )
+
     private fun buildState(
         progress: Double,
         remain: Double,
@@ -163,6 +188,11 @@ class SimulatedNavigator(
         val eye =
             cam.third.copy(distance = (cam.second * (1f - stepRatio)).toInt().coerceAtLeast(0))
 
+        val svc = services.last { pct >= it.first }
+        val service = svc.third.copy(
+            distance = (svc.second * (1f - stepRatio)).toInt().coerceAtLeast(0)
+        )
+
         return NavState(
             progress = pct,
             remainMeters = remain.coerceAtLeast(0.0),
@@ -175,6 +205,7 @@ class SimulatedNavigator(
             altTrend = altTrend,
             altUp = delta >= 0,
             eye = eye,
+            service = service,
             redLight = redLights[step],
             turnLight = turnLights[step]
         )
