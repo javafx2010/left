@@ -19,12 +19,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,7 +47,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,7 +66,6 @@ import com.tencent.tencentmap.mapsdk.maps.model.LatLng
 import com.tencent.tencentmap.mapsdk.maps.model.MarkerOptions
 import com.unic.watchdog.core.AppContainer
 import com.unic.watchdog.core.KeyProvider
-import com.unic.watchdog.core.URUMQI
 import com.unic.watchdog.data.repository.EntityMappers
 import com.unic.watchdog.feature.common.PageTitle
 import com.unic.watchdog.feature.common.SectionTitle
@@ -82,9 +88,9 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.net.URLEncoder
 
-private data class Recent(val name: String, val sub: String)
-
 private data class SearchHit(val title: String, val address: String, val latLng: LatLng)
+
+private data class NearbyCategory(val name: String, val icon: ImageVector, val color: Color)
 
 @Composable
 fun HomeScreen(appVm: AppViewModel) {
@@ -98,7 +104,6 @@ fun HomeScreen(appVm: AppViewModel) {
     var pickingFor by remember { mutableStateOf<FavoritePlace?>(null) }
     // 因“尚未设置定位点”而打开选点面板时，选完直接接着导航。
     var navAfterPick by remember { mutableStateOf(false) }
-    val recents = remember { mutableStateListOf<Recent>() }
     val scope = rememberCoroutineScope()
 
     fun go(place: FavoritePlace) {
@@ -109,7 +114,6 @@ fun HomeScreen(appVm: AppViewModel) {
             pickingFor = place
             return
         }
-        recents.add(0, Recent(place.name, "驾车 · 刚刚"))
         appVm.navigateTo(Poi(place.name, place.sub, latLng, "常用地点"))
     }
 
@@ -172,11 +176,17 @@ fun HomeScreen(appVm: AppViewModel) {
             }
         }
 
-        SectionTitle("最近导航", "今日")
-        recents.forEach { r ->
-            RecentRow(r, onClick = {
-                appVm.navigateTo(Poi(r.name, r.sub, URUMQI, "最近导航"))
-            })
+        SectionTitle("附近", "生活服务 · 一键直达")
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            userScrollEnabled = false
+        ) {
+            items(nearbyCategories) { cat ->
+                NearbyItem(cat)
+            }
         }
     }
 
@@ -210,7 +220,6 @@ fun HomeScreen(appVm: AppViewModel) {
                 pickingFor = null
                 if (navAfterPick) {
                     navAfterPick = false
-                    recents.add(0, Recent(place.name, "驾车 · 刚刚"))
                     appVm.navigateTo(Poi(place.name, place.sub, latLng, "常用地点"))
                 }
             }
@@ -304,34 +313,40 @@ private fun AddPlaceItem(onClick: () -> Unit) {
     }
 }
 
+private val nearbyCategories = listOf(
+    NearbyCategory("加油站", Icons.Default.LocalGasStation, Color(0xFFE0664A)),
+    NearbyCategory("商场", Icons.Default.Storefront, Color(0xFFD98613)),
+    NearbyCategory("停车场", Icons.Default.LocalParking, Color(0xFF3F63BD)),
+    NearbyCategory("咖啡馆", Icons.Default.Coffee, Color(0xFFB06B3D)),
+    NearbyCategory("医院", Icons.Default.LocalHospital, Color(0xFFE05C4A)),
+    NearbyCategory("银行", Icons.Default.AccountBalance, Color(0xFF0E7C74)),
+    NearbyCategory("超市", Icons.Default.ShoppingCart, Color(0xFF8E86D8)),
+    NearbyCategory("美食", Icons.Default.Restaurant, Color(0xFF2B8FAE))
+)
+
 @Composable
-private fun RecentRow(recent: Recent, onClick: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(14.dp), color = Color.White,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable { onClick() }) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(BrandPrimary.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Route,
-                    contentDescription = null,
-                    tint = BrandPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column(Modifier.padding(start = 10.dp)) {
-                Text(recent.name, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-                Text(recent.sub, fontSize = 10.sp, color = MutedInk)
-            }
+private fun NearbyItem(cat: NearbyCategory) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable {
+            // 原型阶段占位交互：后续可接真实 POI 检索。
+        }) {
+        Box(
+            Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(cat.color),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                cat.icon,
+                contentDescription = cat.name,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
         }
+        Spacer(Modifier.height(7.dp))
+        Text(cat.name, fontSize = 11.sp, color = SubInk, maxLines = 1)
     }
 }
 

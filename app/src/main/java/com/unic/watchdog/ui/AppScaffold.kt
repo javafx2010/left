@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -28,6 +28,7 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.unic.watchdog.feature.home.HomeScreen
 import com.unic.watchdog.feature.nav.NavScreen
+import com.unic.watchdog.feature.settings.SettingsScreen
 import com.unic.watchdog.feature.trip.TripScreen
 import com.unic.watchdog.ui.theme.BrandPrimary
 import com.unic.watchdog.ui.theme.MutedInk
@@ -39,6 +40,7 @@ private data class TabItem(val label: String, val icon: ImageVector)
 fun AppScaffold(appVm: AppViewModel = viewModel()) {
     val selected by appVm.selectedTab.collectAsStateWithLifecycle()
     val navigating by appVm.navigating.collectAsStateWithLifecycle()
+    val showNav by appVm.showNav.collectAsStateWithLifecycle()
 
     // 启动即申请定位权限，授权后取一次当前位置供地图/导航使用。
     val locationPermission =
@@ -53,13 +55,13 @@ fun AppScaffold(appVm: AppViewModel = viewModel()) {
     val tabs = listOf(
         TabItem("首页", Icons.Default.Home),
         TabItem("行程", Icons.Default.Route),
-        TabItem("导航", Icons.Default.Place)
+        TabItem("设置", Icons.Default.Settings)
     )
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
-            if (!navigating) {
+            if (!navigating && !showNav) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp
@@ -87,12 +89,13 @@ fun AppScaffold(appVm: AppViewModel = viewModel()) {
         Box(
             Modifier
                 .fillMaxSize()
-                .then(if (navigating) Modifier else Modifier.padding(padding))
+                .then(if (navigating || showNav) Modifier else Modifier.padding(padding))
         ) {
-            when (selected) {
-                TAB_HOME -> HomeScreen(appVm)
-                TAB_TRIP -> TripScreen(appVm)
-                TAB_NAV -> NavScreen(appVm)
+            when {
+                showNav -> NavScreen(appVm)
+                selected == TAB_HOME -> HomeScreen(appVm)
+                selected == TAB_TRIP -> TripScreen(appVm)
+                selected == TAB_SETTINGS -> SettingsScreen(appVm)
             }
         }
     }

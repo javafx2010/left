@@ -191,18 +191,6 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
             navigator?.start()
         })
 
-        // 返回
-        IconButton(
-            onClick = { endNav() },
-            modifier = Modifier
-                .padding(12.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(0.9f))
-                .align(Alignment.TopStart)
-        ) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Ink)
-        }
-
         // 转向指令卡 + 车道引导
         state?.let { s ->
             InstructionCard(
@@ -237,8 +225,7 @@ fun NavigatingScreen(route: RouteOption, appVm: AppViewModel, onExit: () -> Unit
         if (companionOn && state != null) {
             CompanionOverlay(
                 state!!,
-                onExitCompanion = { companionOn = false },
-                onEnd = { endNav() })
+                onExitCompanion = { companionOn = false })
         }
     }
 }
@@ -481,7 +468,7 @@ private fun etaText(s: NavState): String {
 }
 
 @Composable
-private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: () -> Unit) {
+private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit) {
     // 全部用真实数据：车速/转向来自真实 GPS 与路线步骤；信号灯/电子眼无真实数据源则显示未激活。
     val turnRight = s.lane.contains("右") || s.instruction.contains("右")
     val over = s.speed >= 120
@@ -621,9 +608,6 @@ private fun CompanionOverlay(s: NavState, onExitCompanion: () -> Unit, onEnd: ()
         ) {
             IconButton(onClick = onExitCompanion) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "退出陪伴", tint = Color.White)
-            }
-            IconButton(onClick = onEnd) {
-                Icon(Icons.Default.Flag, contentDescription = "结束", tint = Color.White)
             }
         }
     }

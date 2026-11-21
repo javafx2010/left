@@ -1,12 +1,17 @@
 package com.unic.watchdog.feature.nav
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
 import com.tencent.tencentmap.mapsdk.maps.TencentMap
+import com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptorFactory
 import com.tencent.tencentmap.mapsdk.maps.model.LatLng
 import com.tencent.tencentmap.mapsdk.maps.model.Marker
 import com.tencent.tencentmap.mapsdk.maps.model.MarkerOptions
@@ -17,6 +22,7 @@ import com.unic.watchdog.model.NavState
 import com.unic.watchdog.model.RouteOption
 import com.unic.watchdog.util.cumulativeDistances
 import com.unic.watchdog.util.projectToRoute
+import android.graphics.Color as AndroidColor
 
 /**
  * 真实定位导航跟踪：车标跟随设备的真实 GPS/网络定位，沿规划路线投影出已走里程，
@@ -42,7 +48,13 @@ class NavigationTracker(
     fun start() {
         stop()
         if (route.points.isEmpty()) return
-        marker = map.addMarker(MarkerOptions().position(route.points.first()).title("当前位置"))
+        marker = map.addMarker(
+            MarkerOptions()
+                .position(route.points.first())
+                .icon(BitmapDescriptorFactory.fromBitmap(navArrowBitmap()))
+                .anchor(0.5f, 0.5f)
+                .title("当前位置")
+        )
         traveledLine = map.addPolyline(
             PolylineOptions().color(0xFF3CB5A7.toInt()).width(10f)
         )
@@ -168,4 +180,52 @@ class NavigationTracker(
         val arrows = listOf("↰", "↑", "↱", "↓")
         return arrows.mapIndexed { i, a -> LaneCell(a, i == onIndex) }
     }
+}
+
+/**
+ * 绘制腾讯地图风格的导航三角箭头（车头朝上/北）：蓝色水滴形箭头 + 白色描边 + 内嵌白色小三角。
+ * 该 bitmap 作为当前位置 marker 的图标，车头固定朝北（不随路线方向旋转）。
+ */
+private fun navArrowBitmap(): Bitmap {
+    val size = 96
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val px = size / 96f
+
+    // 外轮廓（水滴形箭头，尖端朝上）
+    val body = Path().apply {
+        moveTo(48f * px, 8f * px)
+        cubicTo(60f * px, 8f * px, 68f * px, 18f * px, 72f * px, 26f * px)
+        cubicTo(80f * px, 42f * px, 90f * px, 68f * px, 90f * px, 80f * px)
+        cubicTo(90f * px, 90f * px, 84f * px, 92f * px, 72f * px, 92f * px)
+        lineTo(24f * px, 92f * px)
+        cubicTo(12f * px, 92f * px, 6f * px, 90f * px, 6f * px, 80f * px)
+        cubicTo(6f * px, 68f * px, 16f * px, 42f * px, 24f * px, 26f * px)
+        cubicTo(28f * px, 18f * px, 36f * px, 8f * px, 48f * px, 8f * px)
+        close()
+    }
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.rgb(0x2D, 0x7F, 0xF9)
+    }
+    val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 4f * px
+        color = AndroidColor.WHITE
+    }
+    canvas.drawPath(body, fill)
+    canvas.drawPath(body, stroke)
+
+    // 内嵌白色小三角（表示车头方向，朝北）
+    val inner = Path().apply {
+        moveTo(48f * px, 30f * px)
+        lineTo(60f * px, 54f * px)
+        lineTo(36f * px, 54f * px)
+        close()
+    }
+    canvas.drawPath(inner, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.WHITE
+    })
+    return bmp
 }

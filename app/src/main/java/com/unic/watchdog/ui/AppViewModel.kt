@@ -19,10 +19,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** 3 tab：首页 / 行程 / 导航。 */
+/** 3 tab：首页 / 行程 / 设置。 */
 const val TAB_HOME = 0
 const val TAB_TRIP = 1
-const val TAB_NAV = 2
+const val TAB_SETTINGS = 2
 
 data class FocusEvent(val poi: Poi?, val token: Long = 0L)
 
@@ -60,6 +60,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** 是否处于导航中（沉浸式，隐藏底部 tab 栏）。 */
     private val _navigating = MutableStateFlow(false)
     val navigating: StateFlow<Boolean> = _navigating.asStateFlow()
+
+    /** 是否显示导航页（路线规划 / 导航中），由「发起导航」触发，不再占用底部 tab。 */
+    private val _showNav = MutableStateFlow(false)
+    val showNav: StateFlow<Boolean> = _showNav.asStateFlow()
 
     private var token = 0L
 
@@ -133,11 +137,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _selectedTab.value = tab
     }
 
-    /** 从任意页发起导航：设置目的地并切到导航 tab。 */
+    /** 从任意页发起导航：设置目的地并显示导航页（不再占用底部 tab）。 */
     fun navigateTo(poi: Poi) {
         _navDestination.value = poi
         _navTick.value++
-        _selectedTab.value = TAB_NAV
+        _showNav.value = true
+    }
+
+    /** 退出导航页，回到之前的 tab。 */
+    fun exitNav() {
+        _showNav.value = false
     }
 
     /** 请求某 tab 在地图上定位某点（用 token 保证一次性）。 */

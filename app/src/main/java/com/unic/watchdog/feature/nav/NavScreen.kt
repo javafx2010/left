@@ -3,7 +3,6 @@
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,30 +13,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,11 +57,11 @@ import com.unic.watchdog.map.TencentMapView
 import com.unic.watchdog.model.RouteOption
 import com.unic.watchdog.model.TravelMode
 import com.unic.watchdog.ui.AppViewModel
+import com.unic.watchdog.ui.TAB_SETTINGS
 import com.unic.watchdog.ui.theme.BrandPrimary
 import com.unic.watchdog.ui.theme.Ink
 import com.unic.watchdog.ui.theme.MutedInk
 import com.unic.watchdog.ui.theme.SubInk
-import com.unic.watchdog.ui.theme.SurfaceTint
 
 private sealed interface NavRoute {
     data object Plan : NavRoute
@@ -85,7 +76,10 @@ fun NavScreen(appVm: AppViewModel) {
         is NavRoute.Navigating -> NavigatingScreen(
             r.route,
             appVm,
-            onExit = { route = NavRoute.Plan })
+            onExit = {
+                route = NavRoute.Plan
+                appVm.exitNav()
+            })
     }
 }
 
@@ -94,7 +88,6 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
     val destination by appVm.navDestination.collectAsStateWithLifecycle()
     val currentLocation by appVm.currentLocation.collectAsStateWithLifecycle()
     val focus by appVm.focusEvent.collectAsStateWithLifecycle()
-    val settings by appVm.navSettings.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     // 检索 API 不走 MapView 的 setMapKey，需显式传入从图片解码的 Key。
@@ -108,8 +101,6 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var tencentMap by remember { mutableStateOf<TencentMap?>(null) }
-    var showSettings by remember { mutableStateOf(false) }
-    var voiceDialog by remember { mutableStateOf(false) }
 
     fun drawRoute(option: RouteOption) {
         val map = tencentMap ?: return
@@ -213,34 +204,37 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
                 .padding(12.dp)
                 .padding(top = 8.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color.White,
-                shadowElevation = 4.dp
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedTextField(
-                    value = destination.title,
-                    onValueChange = {},
-                    readOnly = true,
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = BrandPrimary) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("目的地") })
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                TravelMode.entries.forEach { m ->
-                    FilterChip(
-                        selected = mode == m,
-                        onClick = { mode = m },
-                        label = { Text(m.label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = BrandPrimary,
-                            selectedLabelColor = Color.White
-                        )
-                    )
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White,
+                    shadowElevation = 4.dp
+                ) {
+                    IconButton(onClick = { appVm.exitNav() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Ink)
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OutlinedTextField(
+                        value = destination.title,
+                        onValueChange = {},
+                        readOnly = true,
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Search, null, tint = BrandPrimary) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("目的地") })
                 }
             }
+            Spacer(Modifier.height(10.dp))
             error?.let {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -352,7 +346,7 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
             }
         }
 
-        // 右侧浮动设置按钮
+        // 右侧浮动设置按钮（跳转到设置页）
         Column(
             Modifier
                 .align(Alignment.CenterEnd)
@@ -364,7 +358,10 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
                 color = Color.White,
                 shadowElevation = 3.dp
             ) {
-                IconButton(onClick = { showSettings = true }) {
+                IconButton(onClick = {
+                    appVm.exitNav()
+                    appVm.setTab(TAB_SETTINGS)
+                }) {
                     Icon(
                         Icons.Default.Settings,
                         contentDescription = "导航设置",
@@ -374,153 +371,5 @@ private fun RoutePlanScreen(appVm: AppViewModel, onStartNav: (RouteOption) -> Un
             }
         }
     }
-
-    if (showSettings) {
-        NavSettingsDialog(
-            settings = settings,
-            onDismiss = { showSettings = false },
-            onVoiceOn = appVm::setVoiceOn,
-            onPaused = appVm::setPaused,
-            onOpenVoice = { voiceDialog = true }
-        )
-    }
-    if (voiceDialog) {
-        VoiceSettingsDialog(
-            settings = settings,
-            onDismiss = { voiceDialog = false },
-            onMode = appVm::setVoiceMode,
-            onVolume = appVm::setVolume
-        )
-    }
 }
 
-@Composable
-private fun NavSettingsDialog(
-    settings: com.unic.watchdog.ui.NavSettings,
-    onDismiss: () -> Unit,
-    onVoiceOn: (Boolean) -> Unit,
-    onPaused: (Boolean) -> Unit,
-    onOpenVoice: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("导航设置") },
-        text = {
-            Column {
-                SettingRow(
-                    icon = Icons.Default.VolumeUp,
-                    title = "导航播报",
-                    sub = "开启语音引导提示"
-                ) {
-                    Switch(checked = settings.voiceOn, onCheckedChange = onVoiceOn)
-                }
-                SettingRow(
-                    icon = Icons.Default.Settings,
-                    title = "播报设置",
-                    sub = "播报模式与音量",
-                    onClick = onOpenVoice
-                )
-                SettingRow(
-                    icon = Icons.Default.Pause,
-                    title = "暂停导航",
-                    sub = "暂停 / 继续导航进度"
-                ) {
-                    Switch(checked = settings.paused, onCheckedChange = onPaused)
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
-    )
-}
-
-@Composable
-private fun SettingRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    sub: String,
-    onClick: (() -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(SurfaceTint),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = BrandPrimary,
-                modifier = Modifier.size(17.dp)
-            )
-        }
-        Column(
-            Modifier
-                .padding(start = 11.dp)
-                .weight(1f)
-        ) {
-            Text(title, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-            Text(sub, fontSize = 10.sp, color = MutedInk, modifier = Modifier.padding(top = 3.dp))
-        }
-        trailing?.invoke()
-    }
-}
-
-@Composable
-private fun VoiceSettingsDialog(
-    settings: com.unic.watchdog.ui.NavSettings,
-    onDismiss: () -> Unit,
-    onMode: (String) -> Unit,
-    onVolume: (Int) -> Unit
-) {
-    val modes = listOf("简洁", "详细", "静音")
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("导航播报设置") },
-        text = {
-            Column {
-                modes.forEach { m ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onMode(m) }
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = settings.voiceMode == m, onClick = { onMode(m) })
-                        Text(m, fontSize = 13.sp, color = Ink)
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.VolumeUp,
-                        contentDescription = null,
-                        tint = BrandPrimary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("播报音量", fontSize = 11.5.sp, color = MutedInk)
-                    Spacer(Modifier.width(8.dp))
-                    Text("${settings.volume}%", fontSize = 11.5.sp, color = SubInk)
-                }
-                Slider(
-                    value = settings.volume.toFloat(),
-                    onValueChange = { onVolume(it.toInt()) },
-                    valueRange = 0f..100f
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("完成") }
-        }
-    )
-}
